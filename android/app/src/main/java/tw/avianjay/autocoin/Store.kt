@@ -206,12 +206,12 @@ class Store(ctx: Context) {
 
     fun summary(): String {
         val d = current
-        val todayGain = d.pendingGainLive + d.pendingGainWheel + d.pendingGainWatch
+        val todayGain = d.coinTotal + d.wheelTotal + d.watchTotal
         return "${d.date}｜直播間蝦幣 ${d.coinClaims} 次 +%.2f｜轉盤 ${d.wheelSpins} 次 +%.2f｜觀看任務 ${d.watchMinutes} 分鐘 +%.2f｜提領 ${d.withdrawals}/3 次 -%.2f｜今日起始 %.2f｜今日增加 +%.2f｜待提領 %.2f"
             .format(
-                d.pendingGainLive,
-                d.pendingGainWheel,
-                d.pendingGainWatch,
+                d.coinTotal,
+                d.wheelTotal,
+                d.watchTotal,
                 d.withdrawn,
                 d.pendingBaseline,
                 todayGain,

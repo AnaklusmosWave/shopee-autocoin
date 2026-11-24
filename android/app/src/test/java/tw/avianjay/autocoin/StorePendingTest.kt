@@ -92,15 +92,23 @@ class StorePendingTest {
     }
 
     @Test
-    fun summaryShowsPendingBaselineAndNetGain() {
+    fun summaryShowsOperationTotalsAndPendingBaseline() {
         store.observePending(10.0)
         store.observePending(10.25)
+        store.day.coinClaims = 1
+        store.day.coinTotal = 0.25
+        store.day.wheelSpins = 1
+        store.day.wheelTotal = 0.15
+        store.day.watchMinutes = 10
+        store.day.watchTotal = 0.20
 
         val summary = store.summary()
-        assertTrue(summary.contains("直播間蝦幣 0 次 +0.25"))
+        assertTrue(summary.contains("直播間蝦幣 1 次 +0.25"))
+        assertTrue(summary.contains("轉盤 1 次 +0.15"))
+        assertTrue(summary.contains("觀看任務 10 分鐘 +0.20"))
         assertTrue(summary.contains("提領 0/3 次 -0.00"))
         assertTrue(summary.contains("今日起始 10.00"))
-        assertTrue(summary.contains("今日增加 +0.25"))
+        assertTrue(summary.contains("今日增加 +0.60"))
         assertFalse(summary.contains("待領新增"))
     }
 }
