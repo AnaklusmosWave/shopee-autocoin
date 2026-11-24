@@ -15,7 +15,7 @@ class Settings(ctx: Context) {
         set(v) = prefs.edit().putBoolean("withdraw", v).apply()
 
     val minRoomCoins = 0.5          // 卡片上「最多X」低於這個值就不考慮
-    val explorePages = 6            // 「看更多」最多往下捲幾次
+    val explorePages = 3            // 「看更多」最多往下捲幾次
     val maxRoomMinutes = 75.0       // 保險：單一直播間最多待多久
     val noCoinGraceMs = 60_000L     // 「直播間蝦幣」不見多久就換台（領完、回到直播間時會暫時消失）
     val watchRoomMinutes = 10.5     // 只為觀看任務待的話，每間待多久（每場只算 10 分鐘）
