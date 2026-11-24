@@ -302,7 +302,7 @@ class Bot(
         val fresh = cards.values.filter { !day.roomDone(it.key) }
         if (!day.wheelDone) {
             fresh.firstOrNull { it.lottery && !day.flag(it.key) { r -> r.wheel } }?.let {
-                return it to (if (day.coinLimitHit) "wheel" else "coins")
+                return it to "wheel"
             }
         }
         if (!day.coinLimitHit) {
@@ -502,6 +502,8 @@ class Bot(
         room.coins = round2(room.coins + amount)
         day.coinClaims++
         day.coinTotal = round2(day.coinTotal + amount)
+        val pendingAfterClaim = pendingAmount(phone.snapshot())
+        if (pendingAfterClaim != null) store.observePending(pendingAfterClaim, "live")
         store.save()
         AppLog.i("✔ 直播間蝦幣 +%.2f｜%s 第 %d 次｜今天 %d 次，共 %.2f".format(amount, key, room.claims, day.coinClaims, day.coinTotal))
         // 成功提示出來時按鈕常常還停在「領取」；等它換掉再走，免得又按一次
@@ -568,6 +570,7 @@ class Bot(
         if (left == 0.0 || MSG_WHEEL_LIMIT.any { it in text }) wheelExhausted()
         store.save()
         closeOverlay(s)
+        pendingAmount(phone.snapshot())?.let { store.observePending(it, "wheel") }
     }
 
     private fun wheelExhausted() {
@@ -650,6 +653,7 @@ class Bot(
         }
         sleep(1500)  // 等 RN 畫面載完
         s = phone.snapshot()
+        pendingAmount(s)?.let { store.observePending(it) }
         val btn = s.text("領取")
         if (btn != null) {
             val amount = numberNear(s, btn, below = false) ?: 0.0
@@ -658,12 +662,13 @@ class Bot(
             s = phone.snapshot()
             day.watchTotal = round2(day.watchTotal + amount)
             AppLog.i("✔ 觀看任務 +%.2f（領進待提領）".format(amount))
+            pendingAmount(s)?.let { store.observePending(it, "watch") }
         }
         // 進度條下有「N分鐘」和終點的「90分鐘」兩個標籤；只剩一個 90 的話分不出是哪個，就不更新
         val minutes = s.nodes.mapNotNull { Regex("""(\d+)分鐘""").matchEntire(it.text)?.groupValues?.get(1)?.toInt() }.sorted()
         if (minutes.size >= 2 || (minutes.isNotEmpty() && minutes[0] != 90)) day.watchMinutes = minutes[0]
         if (s.text("明天再來") != null || day.watchMinutes >= 90) day.watchDone = true
-        pendingAmount(s)?.let { day.pending = it }
+        pendingAmount(s)?.let { store.observePending(it) }
         store.save()
         AppLog.i("待提領 %.2f｜觀看任務 %d/90 分鐘".format(day.pending, day.watchMinutes))
         if (shouldWithdraw(day.pending, final)) withdraw(s)
@@ -739,6 +744,7 @@ class Bot(
                 day.withdrawals++
                 day.withdrawn += amount
                 day.pending = after
+                store.observePending(after)
                 store.save()
                 AppLog.i("✔ 提領 %d 蝦幣到「我的蝦幣」（待提領剩 %.2f，今天第 %d/3 次）".format(amount, after, day.withdrawals))
                 done = true
@@ -753,6 +759,30 @@ class Bot(
     }
 
     // ---------------- 主迴圈 ----------------
+    /** 每天第一次啟動時先讀待領取，但不領取、不提領。 */
+    private fun initializePendingBaseline() {
+        val day = this.day
+        if (day.pendingBaselineSet) return
+        try {
+            val room = goLive()
+            val banner = readRoom(room).banner
+            if (banner == null) {
+                AppLog.i("第一次啟動時找不到任務獎勵面板，會在下一次讀到待領取數時建立基準")
+                return
+            }
+            phone.tap(banner)
+            val (scr, s) = waitFor(setOf(Screen.PANEL), 10_000)
+            if (scr == Screen.PANEL) {
+                pendingAmount(s)?.let { store.observePending(it) }
+                backToRoom(scr, s)
+            } else {
+                backToRoom(scr, s)
+            }
+        } catch (e: Exception) {
+            AppLog.w("建立待領取基準失敗，會在下次讀到待領取數時重試：$e")
+        }
+    }
+
     fun run() {
         AppLog.i("開始：${store.summary()}")
         try {
@@ -766,6 +796,8 @@ class Bot(
                 phone.launchShopee(initial = true)
                 sleep(8000)
             }
+            ensureApp()
+            initializePendingBaseline()
             while (true) {
                 try {
                     phone.checkActive()

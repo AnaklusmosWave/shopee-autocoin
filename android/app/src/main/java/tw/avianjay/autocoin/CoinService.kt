@@ -28,7 +28,7 @@ import java.util.concurrent.TimeUnit
 class CoinService : AccessibilityService(), Phone {
 
     companion object {
-        private const val STOPPED = "蝦幣 ■ 已停止（點這裡開始）"
+        private const val STOPPED = "蝦幣 ■ 已停止"
 
         @Volatile
         var instance: CoinService? = null

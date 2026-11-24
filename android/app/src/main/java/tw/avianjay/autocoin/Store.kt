@@ -1,6 +1,7 @@
 package tw.avianjay.autocoin
 
 import android.content.Context
+import kotlin.math.roundToInt
 import org.json.JSONObject
 import java.time.LocalDate
 
@@ -10,7 +11,7 @@ class Settings(ctx: Context) {
 
     /** 自動提領（待提領 → 我的蝦幣）。 */
     var withdraw: Boolean
-        get() = prefs.getBoolean("withdraw", true)
+        get() = prefs.getBoolean("withdraw", false)
         set(v) = prefs.edit().putBoolean("withdraw", v).apply()
 
     val minRoomCoins = 0.5          // 卡片上「最多X」低於這個值就不考慮
@@ -46,6 +47,13 @@ class Day(val date: String) {
     var withdrawals = 0
     var withdrawn = 0.0
     var pending = 0.0
+    var pendingBaselineSet = false
+    var pendingBaseline = 0.0
+    var pendingLastObserved = 0.0
+    var pendingGainLive = 0.0
+    var pendingGainWheel = 0.0
+    var pendingGainWatch = 0.0
+    var pendingGainHint: String = ""
     var lastPanel = 0L
     var finalPanel = false
     val rooms = HashMap<String, RoomStat>()
@@ -60,6 +68,10 @@ class Day(val date: String) {
         put("wheelSpins", wheelSpins); put("wheelTotal", wheelTotal); put("wheelDone", wheelDone)
         put("watchTotal", watchTotal); put("watchMinutes", watchMinutes); put("watchDone", watchDone)
         put("withdrawals", withdrawals); put("withdrawn", withdrawn); put("pending", pending)
+        put("pendingBaselineSet", pendingBaselineSet); put("pendingBaseline", pendingBaseline)
+        put("pendingLastObserved", pendingLastObserved)
+        put("pendingGainLive", pendingGainLive); put("pendingGainWheel", pendingGainWheel)
+        put("pendingGainWatch", pendingGainWatch); put("pendingGainHint", pendingGainHint)
         put("lastPanel", lastPanel); put("finalPanel", finalPanel)
         put("rooms", JSONObject().apply {
             for ((k, r) in rooms) put(k, JSONObject().apply {
@@ -79,6 +91,13 @@ class Day(val date: String) {
             watchDone = o.optBoolean("watchDone")
             withdrawals = o.optInt("withdrawals"); withdrawn = o.optDouble("withdrawn", 0.0)
             pending = o.optDouble("pending", 0.0)
+            pendingBaselineSet = o.optBoolean("pendingBaselineSet")
+            pendingBaseline = o.optDouble("pendingBaseline", 0.0)
+            pendingLastObserved = o.optDouble("pendingLastObserved", pending)
+            pendingGainLive = o.optDouble("pendingGainLive", 0.0)
+            pendingGainWheel = o.optDouble("pendingGainWheel", 0.0)
+            pendingGainWatch = o.optDouble("pendingGainWatch", 0.0)
+            pendingGainHint = o.optString("pendingGainHint")
             lastPanel = o.optLong("lastPanel"); finalPanel = o.optBoolean("finalPanel")
             val rs = o.optJSONObject("rooms") ?: JSONObject()
             for (k in rs.keys()) {
@@ -127,9 +146,46 @@ class Store(ctx: Context) {
         prefs.edit().putString("day", current.toJson().toString()).apply()
     }
 
+    /** 記錄待領取蝦幣的正向變化；來源未知時一律歸入直播間蝦幣。 */
+    @Synchronized
+    fun observePending(value: Double, sourceHint: String = ""): Double {
+        val day = current
+        if (!day.pendingBaselineSet) {
+            day.pendingBaselineSet = true
+            day.pendingBaseline = value
+            day.pendingLastObserved = value
+        } else {
+            val gain = roundStoreDiff(day.pendingLastObserved, value)
+            if (gain > 0.0) {
+                val source = sourceHint.ifEmpty { day.pendingGainHint }.ifEmpty { "live" }
+                when (source) {
+                    "wheel" -> day.pendingGainWheel = roundStoreAdd(day.pendingGainWheel, gain)
+                    "watch" -> day.pendingGainWatch = roundStoreAdd(day.pendingGainWatch, gain)
+                    else -> day.pendingGainLive = roundStoreAdd(day.pendingGainLive, gain)
+                }
+            }
+            day.pendingLastObserved = value
+        }
+        day.pending = value
+        day.pendingGainHint = ""
+        save()
+        return (value - day.pendingBaseline).coerceAtLeast(0.0)
+    }
+
+    fun markPendingGainHint(source: String) {
+        current.pendingGainHint = source
+        save()
+    }
+
+    private fun roundStoreDiff(a: Double, b: Double): Double =
+        ((b - a) * 100).roundToInt() / 100.0
+
+    private fun roundStoreAdd(a: Double, b: Double): Double =
+        ((a + b) * 100).roundToInt() / 100.0
+
     fun summary(): String {
         val d = current
-        return "${d.date} 直播間蝦幣 ${d.coinClaims} 次 +%.2f｜轉盤 ${d.wheelSpins} 次 +%.2f｜觀看任務 ${d.watchMinutes} 分鐘 +%.2f｜提領 ${d.withdrawals}/3 次 %.0f｜待提領 %.2f"
-            .format(d.coinTotal, d.wheelTotal, d.watchTotal, d.withdrawn, d.pending)
+        return "${d.date} 直播間蝦幣 ${d.coinClaims} 次 +%.2f 待領新增｜轉盤 ${d.wheelSpins} 次 +%.2f 待領新增｜觀看任務 ${d.watchMinutes} 分鐘 +%.2f 待領新增｜提領 ${d.withdrawals}/3 次 %.0f｜待提領 %.2f"
+            .format(d.pendingGainLive, d.pendingGainWheel, d.pendingGainWatch, d.withdrawn, d.pending)
     }
 }
