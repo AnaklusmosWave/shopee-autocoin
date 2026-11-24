@@ -90,4 +90,17 @@ class StorePendingTest {
         assertEquals(0, store.day.wheelUnavailableCount)
         assertEquals(start + 1_000L + 60 * 60 * 1000L, store.day.wheelRetryAfter)
     }
+
+    @Test
+    fun summaryShowsPendingBaselineAndNetGain() {
+        store.observePending(10.0)
+        store.observePending(10.25)
+
+        val summary = store.summary()
+        assertTrue(summary.contains("直播間蝦幣 0 次 +0.25"))
+        assertTrue(summary.contains("提領 0/3 次 -0.00"))
+        assertTrue(summary.contains("今日起始 10.00"))
+        assertTrue(summary.contains("今日增加 +0.25"))
+        assertFalse(summary.contains("待領新增"))
+    }
 }

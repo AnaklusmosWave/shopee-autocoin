@@ -6,6 +6,7 @@ import android.graphics.Typeface
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.view.View
 import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.ScrollView
@@ -53,16 +54,15 @@ class MainActivity : Activity() {
             isChecked = settings.withdraw
             setOnCheckedChangeListener { _, checked -> settings.withdraw = checked }
         }
-        val hint = TextView(this).apply {
-            textSize = 12f
-            text = "離開蝦皮會暫停操作，切回蝦皮繼續。按「停止」後需再按「開始」才會執行。畫面最下面的小黑條也可以開始／停止。"
-        }
         summary = TextView(this).apply {
             textSize = 13f
             setPadding(0, pad / 2, 0, pad / 2)
         }
         version = TextView(this).apply {
             textSize = 12f
+        }
+        val consoleDivider = View(this).apply {
+            setBackgroundColor(0x33000000)
         }
         logView = TextView(this).apply {
             typeface = Typeface.MONOSPACE
@@ -77,9 +77,15 @@ class MainActivity : Activity() {
             addView(openSettings)
             addView(startStop)
             addView(withdraw)
-            addView(hint)
             addView(summary)
             addView(version)
+            addView(
+                consoleDivider,
+                LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 1).apply {
+                    topMargin = pad / 2
+                    bottomMargin = pad / 2
+                },
+            )
             addView(ScrollView(this@MainActivity).apply { addView(logView) },
                 LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f))
         }
