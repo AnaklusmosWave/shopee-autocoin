@@ -519,6 +519,7 @@ class Bot(
         val key = r.key
         day.room(key).wheel = true
         store.save()
+        phone.clearToast()
         r.wheelButton?.let { phone.tap(it) }
         var cur = waitFor(setOf(Screen.WHEEL, Screen.WHEEL_RESULT), 6000)
         var spins = 0
@@ -527,6 +528,10 @@ class Bot(
             if (scr == Screen.WHEEL_RESULT) {
                 wheelResult(s, key)
                 return true
+            }
+            if (wheelLimitReached(s)) {
+                wheelExhausted()
+                break
             }
             if (scr == Screen.FOLLOW_DIALOG) {
                 AppLog.i("轉盤限粉絲，關注 $key")
@@ -537,11 +542,8 @@ class Bot(
                 continue
             }
             if (scr != Screen.WHEEL || spins >= 3) break
-            if (s.textsExcluding(emptySet()).any { t -> MSG_WHEEL_LIMIT.any { it in t } }) {
-                wheelExhausted()
-                break
-            }
             // 「開始」沒有獨立節點，按轉盤正中央
+            phone.clearToast()
             phone.tap(s.id("iv_draw_light")?.center ?: Pt(x(540), y(1100)))
             spins++
             cur = waitFor(setOf(Screen.WHEEL_RESULT, Screen.FOLLOW_DIALOG), 12_000)
@@ -571,6 +573,13 @@ class Bot(
         store.save()
         closeOverlay(s)
         pendingAmount(phone.snapshot())?.let { store.observePending(it, "wheel") }
+    }
+
+    /** 轉盤達上限可能只透過 Toast 回報，不一定會出現在目前畫面的節點樹。 */
+    private fun wheelLimitReached(s: Snap): Boolean {
+        val texts = s.textsExcluding(emptySet()) + phone.lastToast()
+        if (texts.any { text -> MSG_WHEEL_LIMIT.any { it in text } }) return true
+        return num(s.id("tv_more")?.text) == 0.0
     }
 
     private fun wheelExhausted() {
