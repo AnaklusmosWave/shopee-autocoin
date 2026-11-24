@@ -41,6 +41,8 @@ class Day(val date: String) {
     var wheelSpins = 0
     var wheelTotal = 0.0
     var wheelDone = false
+    var wheelUnavailableCount = 0
+    var wheelRetryAfter = 0L
     var watchTotal = 0.0
     var watchMinutes = 0
     var watchDone = false
@@ -66,6 +68,7 @@ class Day(val date: String) {
         put("date", date)
         put("coinClaims", coinClaims); put("coinTotal", coinTotal); put("coinLimitHit", coinLimitHit)
         put("wheelSpins", wheelSpins); put("wheelTotal", wheelTotal); put("wheelDone", wheelDone)
+        put("wheelUnavailableCount", wheelUnavailableCount); put("wheelRetryAfter", wheelRetryAfter)
         put("watchTotal", watchTotal); put("watchMinutes", watchMinutes); put("watchDone", watchDone)
         put("withdrawals", withdrawals); put("withdrawn", withdrawn); put("pending", pending)
         put("pendingBaselineSet", pendingBaselineSet); put("pendingBaseline", pendingBaseline)
@@ -87,6 +90,8 @@ class Day(val date: String) {
             coinLimitHit = o.optBoolean("coinLimitHit")
             wheelSpins = o.optInt("wheelSpins"); wheelTotal = o.optDouble("wheelTotal", 0.0)
             wheelDone = o.optBoolean("wheelDone")
+            wheelUnavailableCount = o.optInt("wheelUnavailableCount")
+            wheelRetryAfter = o.optLong("wheelRetryAfter")
             watchTotal = o.optDouble("watchTotal", 0.0); watchMinutes = o.optInt("watchMinutes")
             watchDone = o.optBoolean("watchDone")
             withdrawals = o.optInt("withdrawals"); withdrawn = o.optDouble("withdrawn", 0.0)
@@ -174,6 +179,22 @@ class Store(ctx: Context) {
 
     fun markPendingGainHint(source: String) {
         current.pendingGainHint = source
+        save()
+    }
+
+    @Synchronized
+    fun recordWheelUnavailable(now: Long = System.currentTimeMillis()) {
+        val day = current
+        if (day.wheelRetryAfter > 0L && now >= day.wheelRetryAfter) {
+            day.wheelUnavailableCount = 0
+            day.wheelRetryAfter = 0L
+        }
+        day.wheelUnavailableCount++
+        if (day.wheelUnavailableCount >= 2) {
+            day.wheelRetryAfter = now + 60 * 60 * 1000L
+            day.wheelUnavailableCount = 0
+            AppLog.i("連續兩間直播間無法使用轉盤，暫停尋找轉盤 1 小時")
+        }
         save()
     }
 

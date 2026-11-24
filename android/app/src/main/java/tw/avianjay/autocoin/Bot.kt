@@ -300,7 +300,7 @@ class Bot(
     private fun choose(cards: Map<String, Card>): Pair<Card?, String> {
         val day = this.day
         val fresh = cards.values.filter { !day.roomDone(it.key) }
-        if (!day.wheelDone) {
+        if (!day.wheelDone && now() >= day.wheelRetryAfter) {
             fresh.firstOrNull { it.lottery && !day.flag(it.key) { r -> r.wheel } }?.let {
                 return it to "wheel"
             }
@@ -395,9 +395,16 @@ class Bot(
             if (r.wheel in setOf("參加", "已參加") && !wheelSettled && !day.wheelDone && wheelTries < 2) {
                 wheelTries++
                 wheelSettled = playWheel(r)
+                if (!wheelSettled && purpose == "wheel") {
+                    store.recordWheelUnavailable()
+                    return "wheel_checked" to key
+                }
                 continue
             }
-            if (purpose == "wheel") return "wheel_checked" to key
+            if (purpose == "wheel") {
+                if (!wheelSettled) store.recordWheelUnavailable()
+                return "wheel_checked" to key
+            }
 
             if (r.rains.isNotEmpty()) observeRain(r, s)
 

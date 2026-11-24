@@ -77,4 +77,17 @@ class StorePendingTest {
 
         assertFalse(settings.withdraw)
     }
+
+    @Test
+    fun twoUnavailableWheelsStartOneHourCooldown() {
+        val start = 1_000_000L
+
+        store.recordWheelUnavailable(start)
+        assertEquals(1, store.day.wheelUnavailableCount)
+        assertEquals(0L, store.day.wheelRetryAfter)
+
+        store.recordWheelUnavailable(start + 1_000L)
+        assertEquals(0, store.day.wheelUnavailableCount)
+        assertEquals(start + 1_000L + 60 * 60 * 1000L, store.day.wheelRetryAfter)
+    }
 }
