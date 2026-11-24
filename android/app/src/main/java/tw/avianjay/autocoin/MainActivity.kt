@@ -19,6 +19,7 @@ class MainActivity : Activity() {
     private lateinit var startStop: Button
     private var stopDisplayed = false
     private lateinit var summary: TextView
+    private lateinit var version: TextView
     private lateinit var logView: TextView
 
     private val tick = object : Runnable {
@@ -60,6 +61,9 @@ class MainActivity : Activity() {
             textSize = 13f
             setPadding(0, pad / 2, 0, pad / 2)
         }
+        version = TextView(this).apply {
+            textSize = 12f
+        }
         logView = TextView(this).apply {
             typeface = Typeface.MONOSPACE
             textSize = 11f
@@ -75,6 +79,7 @@ class MainActivity : Activity() {
             addView(withdraw)
             addView(hint)
             addView(summary)
+            addView(version)
             addView(ScrollView(this@MainActivity).apply { addView(logView) },
                 LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f))
         }
@@ -103,6 +108,7 @@ class MainActivity : Activity() {
             else -> "開始"
         }
         summary.text = Store(this).summary().replace("｜", "\n")
+        version.text = "版本：${BuildConfig.BUILD_TIME}\nCommit：${BuildConfig.BUILD_COMMIT}"
         logView.text = AppLog.recent(150).asReversed().joinToString("\n")
     }
 }
