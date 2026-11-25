@@ -46,7 +46,13 @@ class MainActivity : Activity() {
             setOnClickListener {
                 val svc = CoinService.instance ?: return@setOnClickListener
                 // 按鈕動作跟顯示的文字一致，避免狀態刷新前按「停止」反而重新開始。
-                if (stopDisplayed) svc.stopBot() else svc.startBot()
+                if (stopDisplayed) {
+                    svc.stopBot()
+                } else {
+                    settings.badgeVisible = true
+                    svc.setBadgeVisible(true)
+                    svc.startBot()
+                }
                 refresh()
             }
         }
