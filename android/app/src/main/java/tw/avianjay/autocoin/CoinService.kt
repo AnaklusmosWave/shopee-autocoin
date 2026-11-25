@@ -11,6 +11,7 @@ import android.os.Handler
 import android.os.Looper
 import android.os.PowerManager
 import android.view.Gravity
+import android.view.View
 import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
@@ -53,6 +54,7 @@ class CoinService : AccessibilityService(), Phone {
         AppLog.init(this)
         instance = this
         showBadge()
+        setBadgeVisible(Settings(this).badgeVisible)
         AppLog.i("無障礙服務已連線")
     }
 
@@ -129,6 +131,20 @@ class CoinService : AccessibilityService(), Phone {
         }
     }
 
+    fun setBadgeVisible(visible: Boolean) {
+        if (badge == null) showBadge()
+        val view = badge ?: return
+        val params = badgeParams ?: return
+        view.visibility = if (visible) View.VISIBLE else View.INVISIBLE
+        view.isEnabled = visible && !stopping
+        params.flags = if (visible) {
+            params.flags and WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE.inv()
+        } else {
+            params.flags or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
+        }
+        getSystemService(WindowManager::class.java).updateViewLayout(view, params)
+    }
+
     private fun setStatus(text: String) {
         statusText = text
         badge?.text = "蝦幣 ▶ $text"
@@ -177,6 +193,7 @@ class CoinService : AccessibilityService(), Phone {
     private fun hideBadge() {
         badge?.let { getSystemService(WindowManager::class.java).removeView(it) }
         badge = null
+        badgeParams = null
     }
 
     private fun keepScreenOn(on: Boolean) {

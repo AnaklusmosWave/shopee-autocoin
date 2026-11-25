@@ -79,6 +79,17 @@ class StorePendingTest {
     }
 
     @Test
+    fun badgeVisibilityDefaultsOnAndCanBeChanged() {
+        val app = RuntimeEnvironment.getApplication()
+        val settings = Settings(app)
+
+        assertTrue(settings.badgeVisible)
+        settings.badgeVisible = false
+
+        assertFalse(Settings(app).badgeVisible)
+    }
+
+    @Test
     fun twoUnavailableWheelsStartOneHourCooldown() {
         val start = 1_000_000L
 

@@ -9,6 +9,11 @@ import java.time.LocalDate
 class Settings(ctx: Context) {
     private val prefs = ctx.getSharedPreferences("settings", Context.MODE_PRIVATE)
 
+    /** 是否顯示螢幕上的懸浮狀態球。 */
+    var badgeVisible: Boolean
+        get() = prefs.getBoolean("badgeVisible", true)
+        set(v) = prefs.edit().putBoolean("badgeVisible", v).apply()
+
     /** 自動提領（待提領 → 我的蝦幣）。 */
     var withdraw: Boolean
         get() = prefs.getBoolean("withdraw", false)

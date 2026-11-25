@@ -18,6 +18,7 @@ class MainActivity : Activity() {
     private val handler = Handler(Looper.getMainLooper())
     private lateinit var serviceState: TextView
     private lateinit var startStop: Button
+    private lateinit var badgeVisibility: Button
     private var stopDisplayed = false
     private lateinit var summary: TextView
     private lateinit var version: TextView
@@ -49,6 +50,19 @@ class MainActivity : Activity() {
                 refresh()
             }
         }
+        badgeVisibility = Button(this).apply {
+            setOnClickListener {
+                val visible = !settings.badgeVisible
+                settings.badgeVisible = visible
+                CoinService.instance?.setBadgeVisible(visible)
+                refresh()
+            }
+        }
+        val controls = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            addView(startStop, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+            addView(badgeVisibility, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        }
         val withdraw = Switch(this).apply {
             text = "自動提領到「我的蝦幣」（每天最多 3 次）"
             isChecked = settings.withdraw
@@ -75,7 +89,7 @@ class MainActivity : Activity() {
             setPadding(pad, pad, pad, pad)
             addView(serviceState)
             addView(openSettings)
-            addView(startStop)
+            addView(controls)
             addView(withdraw)
             addView(summary)
             addView(version)
@@ -113,6 +127,7 @@ class MainActivity : Activity() {
             svc?.running == true -> "停止"
             else -> "開始"
         }
+        badgeVisibility.text = if (Settings(this).badgeVisible) "隱藏懸浮球" else "顯示懸浮球"
         summary.text = Store(this).summary().replace("｜", "\n")
         version.text = "版本：${BuildConfig.BUILD_TIME}\nCommit：${BuildConfig.BUILD_COMMIT}"
         logView.text = AppLog.recent(150).asReversed().joinToString("\n")
