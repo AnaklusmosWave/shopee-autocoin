@@ -51,7 +51,7 @@ class MainActivity : Activity() {
                 } else {
                     settings.badgeVisible = true
                     svc.setBadgeVisible(true)
-                    svc.startBot()
+                    svc.startBotWithCountdown()
                 }
                 refresh()
             }
@@ -126,11 +126,12 @@ class MainActivity : Activity() {
         val svc = CoinService.instance
         serviceState.text = if (svc == null) "無障礙服務：未開啟（請在設定裡開啟「蝦幣助手」）"
         else "無障礙服務：已開啟｜${svc.statusText}"
-        startStop.isEnabled = svc != null && !svc.stopping
+        startStop.isEnabled = svc != null && !svc.stopping && !svc.countingDown
         stopDisplayed = svc?.running == true || svc?.stopping == true
         startStop.text = when {
             svc?.stopping == true -> "停止中…"
             svc?.running == true -> "停止"
+            svc?.countingDown == true -> "開始(${svc.startCountdownSeconds}s)"
             else -> "開始"
         }
         badgeVisibility.text = if (Settings(this).badgeVisible) "隱藏懸浮球" else "顯示懸浮球"

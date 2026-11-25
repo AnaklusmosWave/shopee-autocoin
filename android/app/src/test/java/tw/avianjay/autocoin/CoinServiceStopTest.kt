@@ -98,6 +98,44 @@ class CoinServiceStopTest {
     }
 
     @Test
+    fun appStartButtonShowsCountdownAndDoesNotStartImmediately() {
+        ReflectionHelpers.setStaticField(CoinService::class.java, "instance", service)
+        val controller = Robolectric.buildActivity(MainActivity::class.java).create()
+        val activity = controller.get()
+
+        service.startBotWithCountdown()
+        ReflectionHelpers.callInstanceMethod<Unit>(activity, "refresh")
+        val button = ReflectionHelpers.getField<Button>(activity, "startStop")
+        assertEquals("開始(3s)", button.text.toString())
+        assertEquals("即將開始(3s)", service.statusText)
+        assertNull(worker())
+
+        shadowOf(Looper.getMainLooper()).idleFor(1, TimeUnit.SECONDS)
+        ReflectionHelpers.callInstanceMethod<Unit>(activity, "refresh")
+        assertEquals("開始(2s)", button.text.toString())
+        assertNull(worker())
+
+        service.stopBot()
+        controller.destroy()
+    }
+
+    @Test
+    fun countdownStartsBotAfterThreeSeconds() {
+        service.startBotWithCountdown()
+        shadowOf(Looper.getMainLooper()).idleFor(2, TimeUnit.SECONDS)
+        assertNull(worker())
+
+        shadowOf(Looper.getMainLooper()).idleFor(1, TimeUnit.SECONDS)
+        val thread = waitForQueuedLaunch()
+        service.stopBot()
+        thread.join(5000)
+        shadowOf(Looper.getMainLooper()).idle()
+
+        assertFalse(thread.isAlive)
+        assertEquals("已停止", service.statusText)
+    }
+
+    @Test
     fun serviceInterruptionAlsoStopsPendingAutomation() {
         service.startBot()
         val thread = waitForQueuedLaunch()
