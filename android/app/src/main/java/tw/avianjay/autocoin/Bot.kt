@@ -567,6 +567,7 @@ class Bot(
         val left = num(s.id("tv_more")?.text)
         val day = this.day
         val room = day.room(key)
+        day.wheelCooldownUntil = now() + cfg.wheelCooldownMs
         // 每間只能轉一次，第一次看到結果就記帳（按「關注」時可能就直接轉了，當下讀不到結果）
         if (amount != null && !room.wheelGot) {
             room.wheelGot = true
@@ -576,6 +577,7 @@ class Bot(
         } else if (text.isNotEmpty()) {
             AppLog.i("轉盤：$text")
         }
+        AppLog.i("轉盤完成，冷卻 ${cfg.wheelCooldownMs / 60_000} 分鐘後再尋找")
         if (left == 0.0 || MSG_WHEEL_LIMIT.any { it in text }) wheelExhausted()
         store.save()
         closeOverlay(s)

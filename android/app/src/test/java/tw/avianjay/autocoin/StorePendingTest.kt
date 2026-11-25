@@ -92,6 +92,17 @@ class StorePendingTest {
     }
 
     @Test
+    fun wheelCooldownBlocksRetryUntilExpiry() {
+        val now = 2_000_000L
+        store.day.wheelCooldownUntil = now + 10 * 60 * 1000L
+        store.save()
+
+        val restored = Store(RuntimeEnvironment.getApplication())
+        assertFalse(restored.day.canTryWheel(now))
+        assertTrue(restored.day.canTryWheel(now + 10 * 60 * 1000L))
+    }
+
+    @Test
     fun summaryShowsOperationTotalsAndPendingBaseline() {
         store.observePending(10.0)
         store.observePending(10.25)

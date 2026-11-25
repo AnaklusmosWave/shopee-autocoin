@@ -20,6 +20,7 @@ class Settings(ctx: Context) {
     val noCoinGraceMs = 60_000L     // 「直播間蝦幣」不見多久就換台（領完、回到直播間時會暫時消失）
     val watchRoomMinutes = 10.5     // 只為觀看任務待的話，每間待多久（每場只算 10 分鐘）
     val panelEveryMinutes = 30.0    // 多久開一次面板，把觀看任務的蝦幣領進待提領
+    val wheelCooldownMs = 10 * 60 * 1000L // 每次完成轉盤後，多久再嘗試下一次
     val withdrawMin = 5.0           // 待提領至少這麼多才提領；收尾那次只要 ≥1
     val withdrawDailyLimit = 3      // 蝦皮規定每天最多提領 3 次
 }
@@ -43,6 +44,7 @@ class Day(val date: String) {
     var wheelDone = false
     var wheelUnavailableCount = 0
     var wheelRetryAfter = 0L
+    var wheelCooldownUntil = 0L
     var watchTotal = 0.0
     var watchMinutes = 0
     var watchDone = false
@@ -63,13 +65,15 @@ class Day(val date: String) {
     fun room(key: String) = rooms.getOrPut(key) { RoomStat() }
     fun roomDone(key: String) = key.isNotEmpty() && rooms[key]?.done == true
     fun flag(key: String, pick: (RoomStat) -> Boolean) = rooms[key]?.let(pick) ?: false
-    fun canTryWheel(now: Long) = !wheelDone && now >= wheelRetryAfter
+    fun canTryWheel(now: Long) =
+        !wheelDone && now >= wheelRetryAfter && now >= wheelCooldownUntil
 
     fun toJson(): JSONObject = JSONObject().apply {
         put("date", date)
         put("coinClaims", coinClaims); put("coinTotal", coinTotal); put("coinLimitHit", coinLimitHit)
         put("wheelSpins", wheelSpins); put("wheelTotal", wheelTotal); put("wheelDone", wheelDone)
         put("wheelUnavailableCount", wheelUnavailableCount); put("wheelRetryAfter", wheelRetryAfter)
+        put("wheelCooldownUntil", wheelCooldownUntil)
         put("watchTotal", watchTotal); put("watchMinutes", watchMinutes); put("watchDone", watchDone)
         put("withdrawals", withdrawals); put("withdrawn", withdrawn); put("pending", pending)
         put("pendingBaselineSet", pendingBaselineSet); put("pendingBaseline", pendingBaseline)
@@ -93,6 +97,7 @@ class Day(val date: String) {
             wheelDone = o.optBoolean("wheelDone")
             wheelUnavailableCount = o.optInt("wheelUnavailableCount")
             wheelRetryAfter = o.optLong("wheelRetryAfter")
+            wheelCooldownUntil = o.optLong("wheelCooldownUntil")
             watchTotal = o.optDouble("watchTotal", 0.0); watchMinutes = o.optInt("watchMinutes")
             watchDone = o.optBoolean("watchDone")
             withdrawals = o.optInt("withdrawals"); withdrawn = o.optDouble("withdrawn", 0.0)
