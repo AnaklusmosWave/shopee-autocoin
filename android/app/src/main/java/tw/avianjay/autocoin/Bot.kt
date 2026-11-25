@@ -51,6 +51,7 @@ private val REASONS = mapOf(
 // 因為這些原因離開的直播間，今天就不再進去
 private val DONE_REASONS = setOf("no_coins", "room_done", "timeout", "watched")
 private val STAMP = DateTimeFormatter.ofPattern("MMdd-HHmmss")
+private val EVENT_STAMP = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
 
 private fun round2(v: Double) = (v * 100).roundToInt() / 100.0
 
@@ -805,7 +806,7 @@ class Bot(
     }
 
     fun run() {
-        AppLog.i("開始")
+        AppLog.i("開始：${LocalDateTime.now().format(EVENT_STAMP)}")
         try {
             phone.checkActive()
             // 只有使用者按「開始」時可以從桌面或其他 App 開啟蝦皮。
@@ -838,7 +839,7 @@ class Bot(
         } catch (e: StopBot) {
             AppLog.e("停止：${e.message}")
         } catch (e: InterruptedException) {
-            AppLog.i("已停止")
+            AppLog.i("已停止：${LocalDateTime.now().format(EVENT_STAMP)}")
         }
     }
 
