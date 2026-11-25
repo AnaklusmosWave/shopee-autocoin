@@ -7,6 +7,7 @@ import android.content.pm.ApplicationInfo
 import android.content.pm.ResolveInfo
 import android.os.Looper
 import android.os.PowerManager
+import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import android.widget.Button
 import org.junit.After
@@ -108,6 +109,24 @@ class CoinServiceStopTest {
         assertNull(shadowOf(service as AccessibilityService).nextStartedActivity)
         assertFalse(service.running)
         assertEquals("已停止", service.statusText)
+    }
+
+    @Test
+    fun onlyShopeeToastsUpdateTheBotToast() {
+        fun sendToast(pkg: String, message: String) {
+            val event = AccessibilityEvent.obtain(AccessibilityEvent.TYPE_NOTIFICATION_STATE_CHANGED)
+            event.packageName = pkg
+            event.className = "android.widget.Toast"
+            event.text.add(message)
+            service.onAccessibilityEvent(event)
+        }
+
+        sendToast("android", "other toast")
+        assertEquals("", service.lastToast())
+
+        sendToast(SHOPEE, "Shopee toast")
+        sendToast("android", "other toast")
+        assertEquals("Shopee toast", service.lastToast())
     }
 
     @Test

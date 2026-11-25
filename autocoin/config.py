@@ -11,8 +11,8 @@ class Config:
     adb_port: int = 5037
 
     # 挑直播間
-    min_room_coins: float = 0.5      # 卡片上「最多X」低於這個值就不考慮
-    explore_pages: int = 6           # 「看更多」最多往下捲幾次
+    min_room_coins: float = 0.6      # 卡片上「最多X」低於這個值就不考慮
+    explore_pages: int = 4           # 「看更多」最多往下捲幾次
     # 待在直播間
     max_room_minutes: float = 75     # 保險：單一直播間最多待多久
     no_coin_grace: float = 60        # 「直播間蝦幣」不見多久就換台（領完、回到直播間時會暫時消失）

@@ -28,7 +28,7 @@ import java.util.concurrent.TimeUnit
 class CoinService : AccessibilityService(), Phone {
 
     companion object {
-        private const val STOPPED = "蝦幣 ■ 已停止（點這裡開始）"
+        private const val STOPPED = "蝦幣 ■ 已停止"
 
         @Volatile
         var instance: CoinService? = null
@@ -59,7 +59,9 @@ class CoinService : AccessibilityService(), Phone {
     override fun onAccessibilityEvent(event: AccessibilityEvent) {
         when (event.eventType) {
             AccessibilityEvent.TYPE_NOTIFICATION_STATE_CHANGED ->
-                if (event.className?.contains("Toast") == true) toast = event.text.joinToString("")
+                if (event.packageName == SHOPEE && event.className?.contains("Toast") == true) {
+                    toast = event.text.joinToString("")
+                }
             AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED ->
                 if (event.packageName == SHOPEE) shopeeWindowClass = event.className?.toString() ?: ""
         }

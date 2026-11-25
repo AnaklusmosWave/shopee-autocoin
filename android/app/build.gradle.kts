@@ -4,6 +4,9 @@ plugins {
 
 android {
     namespace = "tw.avianjay.autocoin"
+    buildFeatures {
+        buildConfig = true
+    }
 
     compileSdk {
         version = release(36)
@@ -21,6 +24,8 @@ android {
         targetSdk { version = release(36) }
         versionCode = (System.getenv("VERSION_CODE") ?: "1").toInt()
         versionName = System.getenv("VERSION_NAME") ?: "0.1.0"
+        buildConfigField("String", "BUILD_TIME", "\"${System.getenv("BUILD_TIME") ?: "本機建置"}\"")
+        buildConfigField("String", "BUILD_COMMIT", "\"${System.getenv("BUILD_COMMIT") ?: "本機"}\"")
     }
 
     signingConfigs {
