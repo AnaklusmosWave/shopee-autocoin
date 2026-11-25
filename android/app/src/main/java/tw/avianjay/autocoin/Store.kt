@@ -26,6 +26,9 @@ class Settings(ctx: Context) {
     val watchRoomMinutes = 10.5     // 只為觀看任務待的話，每間待多久（每場只算 10 分鐘）
     val panelEveryMinutes = 30.0    // 多久開一次面板，把觀看任務的蝦幣領進待提領
     val wheelCooldownMs = 10 * 60 * 1000L // 每次完成轉盤後，多久再嘗試下一次
+    val roomClaimsPerVisit = 3      // 單次進房最多領取次數
+    val roomInitialWaitMinutes = 6.0 // 第一次領取前的固定等待時間
+    val roomSwitchSeconds = 25      // 切換直播間的估計耗時
     val withdrawMin = 5.0           // 待提領至少這麼多才提領；收尾那次只要 ≥1
     val withdrawDailyLimit = 3      // 蝦皮規定每天最多提領 3 次
 }

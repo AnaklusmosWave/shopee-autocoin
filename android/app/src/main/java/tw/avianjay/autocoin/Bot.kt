@@ -45,6 +45,7 @@ private val REASONS = mapOf(
     "timeout" to "待太久了",
     "watched" to "觀看任務在這間已累計 10 分鐘",
     "wheel_checked" to "轉盤處理完了",
+    "claim_batch" to "本次已領滿 3 次，尋找效率更高的直播間",
     "lost" to "畫面跑掉了",
     "switched" to "直播間被換掉了",
 )
@@ -52,6 +53,37 @@ private val REASONS = mapOf(
 private val DONE_REASONS = setOf("no_coins", "room_done", "timeout", "watched")
 private val STAMP = DateTimeFormatter.ofPattern("MMdd-HHmmss")
 private val EVENT_STAMP = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
+
+internal fun coinRoomEfficiency(
+    maxCoins: Double,
+    claims: Int,
+    initialWaitMinutes: Double = 6.0,
+    switchSeconds: Int = 25,
+): Double {
+    val reward = maxCoins / 6.0
+    val waitMinutes = initialWaitMinutes + claims.coerceAtLeast(0)
+    return reward / (waitMinutes + switchSeconds / 60.0)
+}
+
+internal fun bestCoinRoom(
+    cards: Collection<Card>,
+    claimsFor: (String) -> Int,
+    minCoins: Double,
+    initialWaitMinutes: Double,
+    switchSeconds: Int,
+): Card? = cards.asSequence()
+    .filter { (it.maxCoins ?: 0.0) >= minCoins }
+    .maxByOrNull {
+        coinRoomEfficiency(
+            it.maxCoins ?: 0.0,
+            claimsFor(it.key),
+            initialWaitMinutes,
+            switchSeconds,
+        )
+    }
+
+internal fun reachedRoomClaimLimit(claimsAtEntry: Int, totalClaims: Int, limit: Int): Boolean =
+    totalClaims - claimsAtEntry >= limit
 
 private fun round2(v: Double) = (v * 100).roundToInt() / 100.0
 
@@ -78,6 +110,7 @@ class Bot(
 
     // 每個直播間用不同的上限，避免「每次都剛好待 10.5 分鐘」這種固定週期指紋
     private val roomCaps = HashMap<String, Double>()
+    private var forceExploreNextCycle = false
     private fun roomCap(key: String, base: Double, pct: Double = 0.25): Double =
         roomCaps.getOrPut("$key@$base") { Jitter.up(base, pct) }
 
@@ -297,7 +330,7 @@ class Bot(
         return cards
     }
 
-    /** 挑下一間：還能轉盤就先去「抽獎」的；再來挑「最多X」最高的；都沒有就去累積觀看任務。 */
+    /** 挑下一間：轉盤優先；直播間蝦幣依下一筆預期收益率排序；最後累積觀看任務。 */
     private fun choose(cards: Map<String, Card>): Pair<Card?, String> {
         val day = this.day
         val fresh = cards.values.filter { !day.roomDone(it.key) }
@@ -307,7 +340,20 @@ class Bot(
             }
         }
         if (!day.coinLimitHit) {
-            fresh.filter { (it.maxCoins ?: 0.0) >= cfg.minRoomCoins }.maxByOrNull { it.maxCoins ?: 0.0 }?.let {
+            bestCoinRoom(
+                fresh,
+                claimsFor = { day.room(it).claims },
+                minCoins = cfg.minRoomCoins,
+                initialWaitMinutes = cfg.roomInitialWaitMinutes,
+                switchSeconds = cfg.roomSwitchSeconds,
+            )?.let {
+                val rate = coinRoomEfficiency(
+                    it.maxCoins ?: 0.0,
+                    day.room(it.key).claims,
+                    cfg.roomInitialWaitMinutes,
+                    cfg.roomSwitchSeconds,
+                )
+                AppLog.i("選擇 ${it.key}：預估下一筆效率 %.4f 蝦幣/分鐘".format(rate))
                 return it to "coins"
             }
         }
@@ -371,6 +417,7 @@ class Bot(
         var wheelChecked = false
         var lastWheel = ""
         var key = ""
+        var claimsAtEntry = 0
         while (true) {
             val (scr, s) = look()
             if (scr != Screen.ROOM) {
@@ -379,14 +426,24 @@ class Bot(
             }
             val r = readRoom(s)
             if (key.isNotEmpty() && r.key.isNotEmpty() && r.key != key) return "switched" to key
+            val day = this.day
             if (key.isEmpty()) {
                 AppLog.d("進房：${r.key}｜直播間蝦幣 ${r.coin.coin} ${r.coin.state.ifEmpty { "-" }}｜轉盤 '${r.wheel}'｜紅包雨 ${r.rains.ifEmpty { "-" }}")
+                key = r.key
+                claimsAtEntry = day.room(key).claims
             } else if (r.wheel != lastWheel) {
                 AppLog.d("轉盤狀態：'$lastWheel' → '${r.wheel}'")
             }
             lastWheel = r.wheel
-            if (key.isEmpty()) key = r.key
-            val day = this.day
+            if (purpose == "coins" &&
+                reachedRoomClaimLimit(
+                    claimsAtEntry,
+                    day.room(key).claims,
+                    cfg.roomClaimsPerVisit,
+                )
+            ) {
+                return "claim_batch" to key
+            }
 
             val verdict = checkMessages(s)
             if (verdict == "room_done" || (verdict == "daily_limit" && purpose == "coins")) return verdict to key
@@ -845,13 +902,15 @@ class Bot(
 
     private fun cycle() {
         val day = this.day
+        val mustExplore = forceExploreNextCycle
+        forceExploreNextCycle = false
         if (day.coinLimitHit && day.wheelDone && day.watchDone) {
             restUntilTomorrow()
             return
         }
-        // 剛好在一間還在倒數的直播間就先待著（離開會讓倒數重來）
+        // 若目前已在直播間就先待著；離開後再進房會從完整等待時間重新倒數。
         val (scr, s) = look()
-        if (scr == Screen.ROOM) {
+        if (scr == Screen.ROOM && !mustExplore) {
             val r = readRoom(s)
             if (r.coin.present && !day.coinLimitHit && !day.roomDone(r.key)) {
                 val (reason, key) = stay("coins")
@@ -872,6 +931,7 @@ class Bot(
 
     private fun finishRoom(keys0: Set<String>, reason: String, purpose: String) {
         val day = this.day
+        if (reason == "claim_batch") forceExploreNextCycle = true
         val keys = keys0.filter { it.isNotEmpty() }
         for (k in keys) {
             val room = day.room(k)
