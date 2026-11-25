@@ -63,6 +63,7 @@ class Day(val date: String) {
     fun room(key: String) = rooms.getOrPut(key) { RoomStat() }
     fun roomDone(key: String) = key.isNotEmpty() && rooms[key]?.done == true
     fun flag(key: String, pick: (RoomStat) -> Boolean) = rooms[key]?.let(pick) ?: false
+    fun canTryWheel(now: Long) = !wheelDone && now >= wheelRetryAfter
 
     fun toJson(): JSONObject = JSONObject().apply {
         put("date", date)

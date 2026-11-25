@@ -49,7 +49,7 @@ private val REASONS = mapOf(
     "switched" to "直播間被換掉了",
 )
 // 因為這些原因離開的直播間，今天就不再進去
-private val DONE_REASONS = setOf("no_coins", "room_done", "timeout", "watched", "wheel_checked")
+private val DONE_REASONS = setOf("no_coins", "room_done", "timeout", "watched")
 private val STAMP = DateTimeFormatter.ofPattern("MMdd-HHmmss")
 
 private fun round2(v: Double) = (v * 100).roundToInt() / 100.0
@@ -300,9 +300,9 @@ class Bot(
     private fun choose(cards: Map<String, Card>): Pair<Card?, String> {
         val day = this.day
         val fresh = cards.values.filter { !day.roomDone(it.key) }
-        if (!day.wheelDone && now() >= day.wheelRetryAfter) {
+        if (day.canTryWheel(now())) {
             fresh.firstOrNull { it.lottery && !day.flag(it.key) { r -> r.wheel } }?.let {
-                return it to "wheel"
+                return it to (if (day.coinLimitHit) "wheel" else "coins")
             }
         }
         if (!day.coinLimitHit) {
@@ -362,13 +362,12 @@ class Bot(
 
     // ---------------- 待在直播間 ----------------
     /** 待在目前的直播間直到該走了。purpose：coins / wheel / watch。回傳（原因, 直播主）。 */
-    private fun stay(purpose: String): Pair<String, String> {
+    private fun stay(purpose: String, card: Card? = null): Pair<String, String> {
         val start = now()
         var coinMissing = 0L
         var oddState = 0L
         var watchStuck = 0L
-        var wheelTries = 0
-        var wheelSettled = false  // 這間的轉盤已經看到結果了
+        var wheelChecked = false
         var lastWheel = ""
         var key = ""
         while (true) {
@@ -392,19 +391,23 @@ class Bot(
             if (verdict == "room_done" || (verdict == "daily_limit" && purpose == "coins")) return verdict to key
 
             // 幸運轉盤：每間一次，每天 10 次。「已參加」只代表關注過，不代表轉過
-            if (r.wheel in setOf("參加", "已參加") && !wheelSettled && !day.wheelDone && wheelTries < 2) {
-                wheelTries++
-                wheelSettled = playWheel(r)
-                if (!wheelSettled && purpose == "wheel") {
-                    store.recordWheelUnavailable()
-                    return "wheel_checked" to key
+            if (!wheelChecked && day.canTryWheel(now())) {
+                val hasWheel = r.wheel == "參加" || r.wheel == "已參加"
+                val roomKeys = setOf(key, card?.key.orEmpty()).filter { it.isNotEmpty() }
+                if ((hasWheel || card?.lottery == true) && roomKeys.none { day.flag(it) { stat -> stat.wheel } }) {
+                    wheelChecked = true
+                    val settled = hasWheel && playWheel(r)
+                    for (roomKey in roomKeys) day.room(roomKey).wheel = true
+                    if (settled || day.wheelDone) {
+                        day.wheelUnavailableCount = 0
+                        store.save()
+                    } else {
+                        store.recordWheelUnavailable()
+                    }
+                    if (hasWheel) continue
                 }
-                continue
             }
-            if (purpose == "wheel") {
-                if (!wheelSettled) store.recordWheelUnavailable()
-                return "wheel_checked" to key
-            }
+            if (purpose == "wheel") return "wheel_checked" to key
 
             if (r.rains.isNotEmpty()) observeRain(r, s)
 
@@ -509,10 +512,9 @@ class Bot(
         room.coins = round2(room.coins + amount)
         day.coinClaims++
         day.coinTotal = round2(day.coinTotal + amount)
-        val pendingAfterClaim = pendingAmount(phone.snapshot())
-        if (pendingAfterClaim != null) store.observePending(pendingAfterClaim, "live")
         store.save()
         AppLog.i("✔ 直播間蝦幣 +%.2f｜%s 第 %d 次｜今天 %d 次，共 %.2f".format(amount, key, room.claims, day.coinClaims, day.coinTotal))
+        pendingAmount(phone.snapshot())?.let { store.observePending(it, "live") }
         // 成功提示出來時按鈕常常還停在「領取」；等它換掉再走，免得又按一次
         //（那個位置按下去會打開任務獎勵面板）
         for (i in 0 until 10) {
@@ -524,8 +526,6 @@ class Bot(
     /** 轉這間的幸運轉盤。看到結果（這次轉的或之前轉過的）就回傳 true。 */
     private fun playWheel(r: Room): Boolean {
         val key = r.key
-        day.room(key).wheel = true
-        store.save()
         phone.clearToast()
         r.wheelButton?.let { phone.tap(it) }
         var cur = waitFor(setOf(Screen.WHEEL, Screen.WHEEL_RESULT), 6000)
@@ -536,7 +536,7 @@ class Bot(
                 wheelResult(s, key)
                 return true
             }
-            if (wheelLimitReached(s)) {
+            if (wheelLimitReached(scr, s)) {
                 wheelExhausted()
                 break
             }
@@ -583,10 +583,13 @@ class Bot(
     }
 
     /** 轉盤達上限可能只透過 Toast 回報，不一定會出現在目前畫面的節點樹。 */
-    private fun wheelLimitReached(s: Snap): Boolean {
-        val texts = s.textsExcluding(emptySet()) + phone.lastToast()
-        if (texts.any { text -> MSG_WHEEL_LIMIT.any { it in text } }) return true
-        return num(s.id("tv_more")?.text) == 0.0
+    private fun wheelLimitReached(screen: Screen, s: Snap): Boolean {
+        val toast = phone.lastToast()
+        if (MSG_WHEEL_LIMIT.any { it in toast }) return true
+        if (screen != Screen.WHEEL) return false
+        val wheel = s.id("main_play_layout") ?: return false
+        if (s.texts(wheel).any { text -> MSG_WHEEL_LIMIT.any { it in text } }) return true
+        return num(s.find(wheel, "tv_more")?.text) == 0.0
     }
 
     private fun wheelExhausted() {
@@ -860,7 +863,7 @@ class Bot(
             sleep(120_000)
             return
         }
-        val (reason, key) = stay(purpose)
+        val (reason, key) = stay(purpose, card)
         finishRoom(setOf(card.key, key), reason, purpose)
     }
 
