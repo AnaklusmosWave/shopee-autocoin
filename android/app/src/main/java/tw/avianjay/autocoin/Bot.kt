@@ -805,7 +805,7 @@ class Bot(
     }
 
     fun run() {
-        AppLog.i("開始：${store.summary()}")
+        AppLog.i("開始")
         try {
             phone.checkActive()
             // 只有使用者按「開始」時可以從桌面或其他 App 開啟蝦皮。
@@ -838,7 +838,7 @@ class Bot(
         } catch (e: StopBot) {
             AppLog.e("停止：${e.message}")
         } catch (e: InterruptedException) {
-            AppLog.i("已停止：${store.summary()}")
+            AppLog.i("已停止")
         }
     }
 
