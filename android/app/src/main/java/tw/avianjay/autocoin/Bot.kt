@@ -54,6 +54,7 @@ private val REASONS = mapOf(
 private val DONE_REASONS = setOf("no_coins", "room_done", "timeout", "watched")
 private val STAMP = DateTimeFormatter.ofPattern("MMdd-HHmmss")
 private val EVENT_STAMP = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
+private const val STATUS_REFRESH_SECONDS = 10
 
 internal fun coinRoomEfficiency(
     maxCoins: Double,
@@ -511,7 +512,7 @@ class Bot(
             if (purpose == "watch") {
                 if (elapsed > roomCap(key, cfg.watchRoomMinutes) * 60_000) return "watched" to key
                 status("任務｜${key.take(12)}")
-                sleep(20_000)
+                sleep(STATUS_REFRESH_SECONDS * 1000L)
                 continue
             }
 
@@ -542,7 +543,7 @@ class Bot(
             status("直播間｜本房已領 ${day.room(key).claims} 次｜${key.take(12)}")
             var nap = secs - Jitter.int(1, 6)  // 不要每次都剛好提前 2 秒醒
             for (state in r.rains.values) countdown(state)?.let { nap = minOf(nap, it - 2) }  // 紅包雨快開始時要醒著
-            sleep(nap.coerceIn(1, 20) * 1000L)
+            sleep(nap.coerceIn(1, STATUS_REFRESH_SECONDS) * 1000L)
         }
     }
 
@@ -587,6 +588,7 @@ class Bot(
         day.coinClaims++
         day.coinTotal = round2(day.coinTotal + amount)
         store.save()
+        status("直播間｜本房已領 ${room.claims} 次｜${key.take(12)}")
         AppLog.i("✔ 直播間蝦幣 +%.2f｜%s 第 %d 次｜今天 %d 次，共 %.2f".format(amount, key, room.claims, day.coinClaims, day.coinTotal))
         pendingAmount(phone.snapshot())?.let { store.observePending(it, "live") }
         // 成功提示出來時按鈕常常還停在「領取」；等它換掉再走，免得又按一次
@@ -655,6 +657,7 @@ class Bot(
         AppLog.i("轉盤完成，冷卻 ${cfg.wheelCooldownMs / 60_000} 分鐘後再尋找")
         if (left == 0.0 || MSG_WHEEL_LIMIT.any { it in text }) wheelExhausted()
         store.save()
+        status("轉盤｜已完成｜${key.take(12)}")
         closeOverlay(s)
         pendingAmount(phone.snapshot())?.let { store.observePending(it, "wheel") }
     }

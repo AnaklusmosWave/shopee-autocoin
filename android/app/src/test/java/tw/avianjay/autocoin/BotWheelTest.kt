@@ -27,6 +27,7 @@ class BotWheelTest {
         assertEquals(0, store.day.coinClaims)
         assertFalse(store.day.roomDone("主播"))
         assertTrue(statuses.contains("轉盤｜主播"))
+        assertTrue(statuses.contains("轉盤｜已完成｜主播"))
         assertTrue(statuses.contains("等待退出直播間"))
     }
 
@@ -57,13 +58,15 @@ class BotWheelTest {
     @Test
     fun successfulClaimSurvivesStoppingBeforeTheBalanceRead() {
         val phone = RoomPhone()
-        runBot(phone) { day.wheelDone = true }
+        val statuses = mutableListOf<String>()
+        runBot(phone, statuses = statuses) { day.wheelDone = true }
 
         assertEquals(listOf("coin"), phone.taps)
         val saved = Store(app).day
         assertEquals(1, saved.coinClaims)
         assertEquals(0.35, saved.coinTotal, 0.001)
         assertEquals(1, saved.room("主播").claims)
+        assertTrue(statuses.contains("直播間｜本房已領 1 次｜主播"))
     }
 
     @Test
