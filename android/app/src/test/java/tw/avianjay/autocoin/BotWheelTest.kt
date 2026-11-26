@@ -17,12 +17,13 @@ class BotWheelTest {
     private val app: Application get() = RuntimeEnvironment.getApplication()
 
     @Test
-    fun lotteryRoomStillHandlesLiveCoinsAfterWheel() {
+    fun completedWheelLeavesRoomBeforeClaimingLiveCoins() {
         val phone = RoomPhone(startOnList = true)
         val store = runBot(phone)
 
-        assertEquals(listOf("card", "wheel", "spin", "close", "coin"), phone.taps)
+        assertEquals(listOf("card", "wheel", "spin", "close"), phone.taps)
         assertEquals(1, store.day.wheelSpins)
+        assertEquals(0, store.day.coinClaims)
         assertFalse(store.day.roomDone("主播"))
     }
 
@@ -67,7 +68,7 @@ class BotWheelTest {
         val phone = RoomPhone(chat = "達到每日參與上限")
         val store = runBot(phone)
 
-        assertEquals(listOf("wheel", "spin", "close", "coin"), phone.taps)
+        assertEquals(listOf("wheel", "spin", "close"), phone.taps)
         assertFalse(store.day.wheelDone)
     }
 
@@ -76,8 +77,9 @@ class BotWheelTest {
         val phone = RoomPhone(wheelToast = "達到每日參與上限")
         val store = runBot(phone)
 
-        assertEquals(listOf("wheel", "close", "coin"), phone.taps)
+        assertEquals(listOf("wheel", "close"), phone.taps)
         assertTrue(store.day.wheelDone)
+        assertEquals(0, store.day.coinClaims)
     }
 
     private fun runBot(phone: RoomPhone, setup: Store.() -> Unit = {}): Store {

@@ -45,6 +45,7 @@ private val REASONS = mapOf(
     "timeout" to "待太久了",
     "watched" to "觀看任務在這間已累計 10 分鐘",
     "wheel_checked" to "轉盤處理完了",
+    "wheel_completed" to "轉盤完成，離開直播間重新選擇",
     "claim_batch" to "本次已領滿 3 次，尋找效率更高的直播間",
     "lost" to "畫面跑掉了",
     "switched" to "直播間被換掉了",
@@ -462,7 +463,8 @@ class Bot(
                     } else {
                         store.recordWheelUnavailable()
                     }
-                    if (hasWheel) continue
+                    if (settled) return "wheel_completed" to key
+                    return "wheel_checked" to key
                 }
             }
             if (purpose == "wheel") return "wheel_checked" to key
@@ -931,7 +933,9 @@ class Bot(
 
     private fun finishRoom(keys0: Set<String>, reason: String, purpose: String) {
         val day = this.day
-        if (reason == "claim_batch") forceExploreNextCycle = true
+        if (reason == "claim_batch" || reason == "wheel_completed" || reason == "wheel_checked") {
+            forceExploreNextCycle = true
+        }
         val keys = keys0.filter { it.isNotEmpty() }
         for (k in keys) {
             val room = day.room(k)
