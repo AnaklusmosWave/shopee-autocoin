@@ -730,7 +730,7 @@ class Bot(
 
     /** 開任務獎勵面板：把觀看任務的蝦幣領進待提領，需要時提領。直播間會縮成浮窗，倒數不受影響。 */
     private fun panelTasks(final: Boolean = false) {
-        status("任務｜領取獎勵")
+        status("任務｜確認待提領蝦幣數")
         val day = this.day
         day.lastPanel = now()
         store.save()
@@ -787,7 +787,7 @@ class Bot(
 
     /** 在面板按「提領」，選不超過待提領的最大面額，送出並確認待提領有變少。 */
     private fun withdraw(panel: Snap) {
-        status("任務｜提領")
+        status("任務｜提領蝦幣")
         val day = this.day
         val btn = panel.text("提領") ?: return
         phone.tap(btn.center)
