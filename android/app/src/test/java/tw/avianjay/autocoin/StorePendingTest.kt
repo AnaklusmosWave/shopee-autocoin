@@ -9,6 +9,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
+import java.time.LocalDateTime
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [36])
@@ -19,8 +20,34 @@ class StorePendingTest {
     fun setUp() {
         val app = RuntimeEnvironment.getApplication()
         app.getSharedPreferences("state", android.content.Context.MODE_PRIVATE).edit().clear().commit()
+        app.getSharedPreferences("room_coin_records", android.content.Context.MODE_PRIVATE).edit().clear().commit()
         app.getSharedPreferences("settings", android.content.Context.MODE_PRIVATE).edit().clear().commit()
         store = Store(app)
+    }
+
+    @Test
+    fun roomClaimRecordUsesRoomAndMaximumAndResetsCountWhenMaximumChanges() {
+        store.recordRoomClaim(setOf("主播"), 6.0)
+        store.day.coinTotal = 1.25
+        store.save()
+
+        assertEquals(1, Store(RuntimeEnvironment.getApplication()).roomClaims("主播"))
+        assertTrue(store.observeRoomMax("主播", 5.5))
+        assertEquals(0, store.roomClaims("主播"))
+        assertEquals(1.25, store.day.coinTotal, 0.001)
+        assertFalse(store.observeRoomMax("主播", 5.5))
+    }
+
+    @Test
+    fun roomClaimRecordDateRollsOverAtThreeAm() {
+        assertEquals(
+            "2026-11-25",
+            roomRecordDate(LocalDateTime.of(2026, 11, 26, 2, 59)),
+        )
+        assertEquals(
+            "2026-11-26",
+            roomRecordDate(LocalDateTime.of(2026, 11, 26, 3, 0)),
+        )
     }
 
     @Test

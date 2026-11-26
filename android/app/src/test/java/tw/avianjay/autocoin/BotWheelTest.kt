@@ -65,7 +65,7 @@ class BotWheelTest {
         val saved = Store(app).day
         assertEquals(1, saved.coinClaims)
         assertEquals(0.35, saved.coinTotal, 0.001)
-        assertEquals(1, saved.room("主播").claims)
+        assertEquals(1, Store(app).roomClaims("主播"))
         assertTrue(statuses.contains("直播間｜本房已領 1 次｜主播"))
     }
 
@@ -93,6 +93,8 @@ class BotWheelTest {
         statuses: MutableList<String>? = null,
         setup: Store.() -> Unit = {},
     ): Store {
+        app.getSharedPreferences("room_coin_records", android.content.Context.MODE_PRIVATE)
+            .edit().clear().commit()
         val store = Store(app)
         store.day.lastPanel = Long.MAX_VALUE
         store.observePending(0.0)

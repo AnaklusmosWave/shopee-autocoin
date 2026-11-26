@@ -335,6 +335,14 @@ class Bot(
     /** 挑下一間：轉盤優先；直播間蝦幣依下一筆預期收益率排序；最後累積觀看任務。 */
     private fun choose(cards: Map<String, Card>): Pair<Card?, String> {
         val day = this.day
+        var roomStateChanged = false
+        for (card in cards.values) {
+            if (store.observeRoomMax(card.key, card.maxCoins)) {
+                day.room(card.key).done = false
+                roomStateChanged = true
+            }
+        }
+        if (roomStateChanged) store.save()
         val fresh = cards.values.filter { !day.roomDone(it.key) }
         if (day.canTryWheel(now())) {
             fresh.firstOrNull { it.lottery && !day.flag(it.key) { r -> r.wheel } }?.let {
@@ -345,14 +353,14 @@ class Bot(
         if (!day.coinLimitHit) {
             bestCoinRoom(
                 fresh,
-                claimsFor = { day.room(it).claims },
+                claimsFor = { store.roomClaims(it) },
                 minCoins = cfg.minRoomCoins,
                 initialWaitMinutes = cfg.roomInitialWaitMinutes,
                 switchSeconds = cfg.roomSwitchSeconds,
             )?.let {
                 val rate = coinRoomEfficiency(
                     it.maxCoins ?: 0.0,
-                    day.room(it.key).claims,
+                    store.roomClaims(it.key),
                     cfg.roomInitialWaitMinutes,
                     cfg.roomSwitchSeconds,
                 )
@@ -446,7 +454,16 @@ class Bot(
             if (key.isEmpty()) {
                 AppLog.d("進房：${r.key}｜直播間蝦幣 ${r.coin.coin} ${r.coin.state.ifEmpty { "-" }}｜轉盤 '${r.wheel}'｜紅包雨 ${r.rains.ifEmpty { "-" }}")
                 key = r.key
-                claimsAtEntry = day.room(key).claims
+                val roomKeys = setOf(key, card?.key.orEmpty()).filter { it.isNotEmpty() }.toSet()
+                var roomStateChanged = false
+                for (roomKey in roomKeys) {
+                    if (store.observeRoomMax(roomKey, card?.maxCoins)) {
+                        day.room(roomKey).done = false
+                        roomStateChanged = true
+                    }
+                }
+                if (roomStateChanged) store.save()
+                claimsAtEntry = roomKeys.maxOfOrNull { store.roomClaims(it) } ?: 0
             } else if (r.wheel != lastWheel) {
                 AppLog.d("轉盤狀態：'$lastWheel' → '${r.wheel}'")
             }
@@ -454,7 +471,7 @@ class Bot(
             if (purpose == "coins" &&
                 reachedRoomClaimLimit(
                     claimsAtEntry,
-                    day.room(key).claims,
+                    store.roomClaims(key),
                     cfg.roomClaimsPerVisit,
                 )
             ) {
@@ -526,7 +543,7 @@ class Bot(
             coinMissing = 0L
             if (r.coin.claimable) {
                 if ("成功" in r.claimed) sleep(1000)  // 上一次的成功提示還在，按鈕還沒換掉
-                else claim(r)
+                else claim(r, setOf(key, card?.key.orEmpty()), card?.maxCoins)
                 continue
             }
             val secs = r.coin.seconds
@@ -540,7 +557,7 @@ class Bot(
                 continue
             }
             oddState = 0L
-            status("直播間｜本房已領 ${day.room(key).claims} 次｜${key.take(12)}")
+            status("直播間｜本房已領 ${store.roomClaims(key)} 次｜${key.take(12)}")
             var nap = secs - Jitter.int(1, 6)  // 不要每次都剛好提前 2 秒醒
             for (state in r.rains.values) countdown(state)?.let { nap = minOf(nap, it - 2) }  // 紅包雨快開始時要醒著
             sleep(nap.coerceIn(1, STATUS_REFRESH_SECONDS) * 1000L)
@@ -548,7 +565,7 @@ class Bot(
     }
 
     /** 按「直播間蝦幣」的領取，確認有成功。 */
-    private fun claim(r: Room) {
+    private fun claim(r: Room, roomKeys: Set<String>, maxCoins: Double?) {
         val key = r.key
         val before = r.coin.coin ?: 0.0
         phone.clearToast()
@@ -583,13 +600,14 @@ class Bot(
         }
         val day = this.day
         val room = day.room(key)
-        room.claims++
         room.coins = round2(room.coins + amount)
+        store.recordRoomClaim(roomKeys, maxCoins)
         day.coinClaims++
         day.coinTotal = round2(day.coinTotal + amount)
         store.save()
-        status("直播間｜本房已領 ${room.claims} 次｜${key.take(12)}")
-        AppLog.i("✔ 直播間蝦幣 +%.2f｜%s 第 %d 次｜今天 %d 次，共 %.2f".format(amount, key, room.claims, day.coinClaims, day.coinTotal))
+        val roomClaims = store.roomClaims(key)
+        status("直播間｜本房已領 $roomClaims 次｜${key.take(12)}")
+        AppLog.i("✔ 直播間蝦幣 +%.2f｜%s 第 %d 次｜今天 %d 次，共 %.2f".format(amount, key, roomClaims, day.coinClaims, day.coinTotal))
         pendingAmount(phone.snapshot())?.let { store.observePending(it, "live") }
         // 成功提示出來時按鈕常常還停在「領取」；等它換掉再走，免得又按一次
         //（那個位置按下去會打開任務獎勵面板）
@@ -963,7 +981,7 @@ class Bot(
             if (reason in DONE_REASONS || reason.startsWith("coin_state")) room.done = true
         }
         store.save()
-        val claims = keys.maxOfOrNull { day.room(it).claims } ?: 0
+        val claims = keys.maxOfOrNull { store.roomClaims(it) } ?: 0
         AppLog.i("離開 ${keys.sorted().joinToString("／").ifEmpty { "?" }}：${REASONS[reason] ?: reason}（這間領了 $claims 次）")
         leave()
     }
