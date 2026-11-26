@@ -496,7 +496,7 @@ class Bot(
             if (elapsed > roomCap(key, cfg.maxRoomMinutes) * 60_000) return "timeout" to key
             if (purpose == "watch") {
                 if (elapsed > roomCap(key, cfg.watchRoomMinutes) * 60_000) return "watched" to key
-                status("累積觀看任務｜${key.take(12)}")
+                status("任務｜${key.take(12)}")
                 sleep(20_000)
                 continue
             }
@@ -525,7 +525,7 @@ class Bot(
                 continue
             }
             oddState = 0L
-            status("${key.take(12)}｜${r.coin.state} 後領 ${r.coin.coin ?: "?"}｜本房已領 ${day.room(key).claims} 次")
+            status("直播間｜${key.take(12)}｜本房已領 ${day.room(key).claims} 次")
             var nap = secs - Jitter.int(1, 6)  // 不要每次都剛好提前 2 秒醒
             for (state in r.rains.values) countdown(state)?.let { nap = minOf(nap, it - 2) }  // 紅包雨快開始時要醒著
             sleep(nap.coerceIn(1, 20) * 1000L)
@@ -586,6 +586,7 @@ class Bot(
     /** 轉這間的幸運轉盤。看到結果（這次轉的或之前轉過的）就回傳 true。 */
     private fun playWheel(r: Room): Boolean {
         val key = r.key
+        status("轉盤｜${key.take(12)}")
         phone.clearToast()
         r.wheelButton?.let { phone.tap(it) }
         var cur = waitFor(setOf(Screen.WHEEL, Screen.WHEEL_RESULT), 6000)
@@ -712,6 +713,7 @@ class Bot(
 
     /** 開任務獎勵面板：把觀看任務的蝦幣領進待提領，需要時提領。直播間會縮成浮窗，倒數不受影響。 */
     private fun panelTasks(final: Boolean = false) {
+        status("任務｜領取獎勵")
         val day = this.day
         day.lastPanel = now()
         store.save()
@@ -768,6 +770,7 @@ class Bot(
 
     /** 在面板按「提領」，選不超過待提領的最大面額，送出並確認待提領有變少。 */
     private fun withdraw(panel: Snap) {
+        status("任務｜提領")
         val day = this.day
         val btn = panel.text("提領") ?: return
         phone.tap(btn.center)

@@ -19,12 +19,14 @@ class BotWheelTest {
     @Test
     fun completedWheelLeavesRoomBeforeClaimingLiveCoins() {
         val phone = RoomPhone(startOnList = true)
-        val store = runBot(phone)
+        val statuses = mutableListOf<String>()
+        val store = runBot(phone, statuses = statuses)
 
         assertEquals(listOf("card", "wheel", "spin", "close"), phone.taps)
         assertEquals(1, store.day.wheelSpins)
         assertEquals(0, store.day.coinClaims)
         assertFalse(store.day.roomDone("主播"))
+        assertTrue(statuses.contains("轉盤｜主播"))
     }
 
     @Test
@@ -82,12 +84,17 @@ class BotWheelTest {
         assertEquals(0, store.day.coinClaims)
     }
 
-    private fun runBot(phone: RoomPhone, setup: Store.() -> Unit = {}): Store {
+    private fun runBot(
+        phone: RoomPhone,
+        statuses: MutableList<String>? = null,
+        setup: Store.() -> Unit = {},
+    ): Store {
         val store = Store(app)
         store.day.lastPanel = Long.MAX_VALUE
         store.observePending(0.0)
         store.setup()
         Bot(phone, store, Settings(app)) { status ->
+            statuses?.add(status)
             if (status == "沒有合適的直播間，稍後再找") throw InterruptedException()
         }.run()
         return store
