@@ -525,7 +525,7 @@ class Bot(
                 continue
             }
             oddState = 0L
-            status("${key.take(12)}｜${r.coin.state} 後領 ${r.coin.coin ?: "?"}｜今天 ${day.coinClaims} 次 +%.2f".format(day.coinTotal))
+            status("${key.take(12)}｜${r.coin.state} 後領 ${r.coin.coin ?: "?"}｜本房已領 ${day.room(key).claims} 次")
             var nap = secs - Jitter.int(1, 6)  // 不要每次都剛好提前 2 秒醒
             for (state in r.rains.values) countdown(state)?.let { nap = minOf(nap, it - 2) }  // 紅包雨快開始時要醒著
             sleep(nap.coerceIn(1, 20) * 1000L)
