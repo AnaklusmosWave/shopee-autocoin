@@ -412,6 +412,7 @@ class Bot(
 
     /** 離開目前的直播間。獨立直播間按 X；首頁直播分頁裡那間不用關，下次直接開「看更多」。 */
     private fun leave() {
+        status("等待退出直播間")
         val (scr, s) = look()
         if (scr == Screen.ROOM) {
             readRoom(s).close?.let {

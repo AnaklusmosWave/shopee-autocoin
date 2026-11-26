@@ -27,6 +27,7 @@ class BotWheelTest {
         assertEquals(0, store.day.coinClaims)
         assertFalse(store.day.roomDone("主播"))
         assertTrue(statuses.contains("轉盤｜主播"))
+        assertTrue(statuses.contains("等待退出直播間"))
     }
 
     @Test
