@@ -337,6 +337,7 @@ class Bot(
         val fresh = cards.values.filter { !day.roomDone(it.key) }
         if (day.canTryWheel(now())) {
             fresh.firstOrNull { it.lottery && !day.flag(it.key) { r -> r.wheel } }?.let {
+                status("找直播間中｜尋找轉盤")
                 return it to (if (day.coinLimitHit) "wheel" else "coins")
             }
         }
@@ -355,12 +356,17 @@ class Bot(
                     cfg.roomSwitchSeconds,
                 )
                 AppLog.i("選擇 ${it.key}：預估下一筆效率 %.4f 蝦幣/分鐘".format(rate))
+                status("找直播間中｜尋找直播間蝦幣")
                 return it to "coins"
             }
         }
         if (!day.watchDone) {
-            fresh.firstOrNull { !day.flag(it.key) { r -> r.watched } }?.let { return it to "watch" }
+            fresh.firstOrNull { !day.flag(it.key) { r -> r.watched } }?.let {
+                status("找直播間中｜尋找任務")
+                return it to "watch"
+            }
         }
+        status("找直播間中｜沒有可執行目標")
         return null to ""
     }
 
@@ -382,7 +388,14 @@ class Bot(
     }
 
     private fun pick(): Pair<Card?, String> {
-        status("找直播間中")
+        val day = this.day
+        val target = when {
+            day.canTryWheel(now()) -> "轉盤"
+            !day.coinLimitHit -> "直播間蝦幣"
+            !day.watchDone -> "任務"
+            else -> "可用目標"
+        }
+        status("找直播間中｜尋找$target")
         val s = openExplore() ?: return null to ""
         val cards = scan(scrollTop(s))
         val (card, purpose) = choose(cards)
