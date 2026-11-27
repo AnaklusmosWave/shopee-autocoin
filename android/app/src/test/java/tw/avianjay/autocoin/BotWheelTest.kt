@@ -79,13 +79,15 @@ class BotWheelTest {
     }
 
     @Test
-    fun wheelStillHonorsTheLimitToast() {
+    fun wheelLimitToastLeavesRoomWithoutClaimingItsLiveCoins() {
         val phone = RoomPhone(wheelToast = "達到每日參與上限")
-        val store = runBot(phone)
+        val statuses = mutableListOf<String>()
+        val store = runBot(phone, statuses = statuses)
 
-        assertEquals(listOf("wheel", "close", "coin"), phone.taps)
+        assertEquals(listOf("wheel", "close"), phone.taps)
         assertTrue(store.day.wheelDone)
-        assertEquals(1, store.day.coinClaims)
+        assertEquals(0, store.day.coinClaims)
+        assertTrue(statuses.contains("等待退出直播間"))
     }
 
     @Test

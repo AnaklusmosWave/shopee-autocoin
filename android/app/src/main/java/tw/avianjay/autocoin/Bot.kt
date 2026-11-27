@@ -483,7 +483,7 @@ class Bot(
                         store.recordWheelUnavailable()
                     }
                     if (settled) return "wheel_completed" to key
-                    if (hasWheel) continue
+                    return "wheel_checked" to key
                 }
             }
             if (purpose == "wheel") return "wheel_checked" to key
