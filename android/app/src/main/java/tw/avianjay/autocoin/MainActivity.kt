@@ -18,6 +18,7 @@ class MainActivity : Activity() {
     private val handler = Handler(Looper.getMainLooper())
     private lateinit var serviceState: TextView
     private lateinit var startStop: Button
+    private lateinit var badgeVisibility: Button
     private var stopDisplayed = false
     private lateinit var summary: TextView
     private lateinit var version: TextView
@@ -45,9 +46,28 @@ class MainActivity : Activity() {
             setOnClickListener {
                 val svc = CoinService.instance ?: return@setOnClickListener
                 // 按鈕動作跟顯示的文字一致，避免狀態刷新前按「停止」反而重新開始。
-                if (stopDisplayed) svc.stopBot() else svc.startBot()
+                if (stopDisplayed) {
+                    svc.stopBot()
+                } else {
+                    settings.badgeVisible = true
+                    svc.setBadgeVisible(true)
+                    svc.startBotWithCountdown()
+                }
                 refresh()
             }
+        }
+        badgeVisibility = Button(this).apply {
+            setOnClickListener {
+                val visible = !settings.badgeVisible
+                settings.badgeVisible = visible
+                CoinService.instance?.setBadgeVisible(visible)
+                refresh()
+            }
+        }
+        val controls = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            addView(startStop, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+            addView(badgeVisibility, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
         }
         val withdraw = Switch(this).apply {
             text = "自動提領到「我的蝦幣」（每天最多 3 次）"
@@ -75,7 +95,7 @@ class MainActivity : Activity() {
             setPadding(pad, pad, pad, pad)
             addView(serviceState)
             addView(openSettings)
-            addView(startStop)
+            addView(controls)
             addView(withdraw)
             addView(summary)
             addView(version)
@@ -107,12 +127,14 @@ class MainActivity : Activity() {
         serviceState.text = if (svc == null) "無障礙服務：未開啟（請在設定裡開啟「蝦幣助手」）"
         else "無障礙服務：已開啟｜${svc.statusText}"
         startStop.isEnabled = svc != null && !svc.stopping
-        stopDisplayed = svc?.running == true || svc?.stopping == true
+        stopDisplayed = svc?.running == true || svc?.stopping == true || svc?.countingDown == true
         startStop.text = when {
             svc?.stopping == true -> "停止中…"
             svc?.running == true -> "停止"
+            svc?.countingDown == true -> "取消開始(${svc.startCountdownSeconds}s)"
             else -> "開始"
         }
+        badgeVisibility.text = if (Settings(this).badgeVisible) "隱藏懸浮球" else "顯示懸浮球"
         summary.text = Store(this).summary().replace("｜", "\n")
         version.text = "版本：${BuildConfig.BUILD_TIME}\nCommit：${BuildConfig.BUILD_COMMIT}"
         logView.text = AppLog.recent(150).asReversed().joinToString("\n")

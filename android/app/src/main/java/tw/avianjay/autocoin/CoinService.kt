@@ -10,7 +10,9 @@ import android.graphics.PixelFormat
 import android.os.Handler
 import android.os.Looper
 import android.os.PowerManager
+import android.os.SystemClock
 import android.view.Gravity
+import android.view.View
 import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
@@ -38,6 +40,9 @@ class CoinService : AccessibilityService(), Phone {
     private val main = Handler(Looper.getMainLooper())
     @Volatile private var worker: Thread? = null
     @Volatile private var stopRequested = true
+    @Volatile private var startCountdownTask: Runnable? = null
+    @Volatile var startCountdownSeconds = 0
+        private set
     @Volatile private var toast = ""
     @Volatile private var shopeeWindowClass = ""
     @Volatile var statusText = "已停止"
@@ -48,11 +53,13 @@ class CoinService : AccessibilityService(), Phone {
 
     val running get() = worker != null && !stopRequested
     val stopping get() = worker != null && stopRequested
+    val countingDown get() = startCountdownTask != null
 
     override fun onServiceConnected() {
         AppLog.init(this)
         instance = this
         showBadge()
+        setBadgeVisible(Settings(this).badgeVisible)
         AppLog.i("無障礙服務已連線")
     }
 
@@ -85,6 +92,7 @@ class CoinService : AccessibilityService(), Phone {
 
     // ---------------- 開始 / 停止 ----------------
     fun startBot() {
+        cancelStartCountdown()
         // 舊工作確實結束後才能再開，避免兩個 bot 同時操作或寫入統計。
         if (worker != null) return
         stopRequested = false
@@ -113,8 +121,46 @@ class CoinService : AccessibilityService(), Phone {
         thread.start()
     }
 
+    fun startBotWithCountdown(seconds: Int = 3) {
+        if (worker != null || countingDown) return
+        require(seconds > 0) { "倒數秒數必須大於 0" }
+        val deadline = SystemClock.elapsedRealtime() + seconds * 1000L
+        val task = object : Runnable {
+            override fun run() {
+                val remaining = ((deadline - SystemClock.elapsedRealtime() + 999) / 1000)
+                    .toInt()
+                    .coerceAtLeast(0)
+                if (remaining == 0) {
+                    startCountdownTask = null
+                    startCountdownSeconds = 0
+                    startBot()
+                    return
+                }
+                startCountdownSeconds = remaining
+                statusText = "即將開始(${remaining}s)"
+                badge?.text = "蝦幣 ▶ 取消開始(${remaining}s)"
+                main.postDelayed(this, 1000)
+            }
+        }
+        startCountdownTask = task
+        task.run()
+    }
+
+    private fun cancelStartCountdown() {
+        val task = startCountdownTask ?: return
+        main.removeCallbacks(task)
+        startCountdownTask = null
+        startCountdownSeconds = 0
+        statusText = "已停止"
+        badge?.apply {
+            text = STOPPED
+            isEnabled = true
+        }
+    }
+
     fun stopBot() {
         // interrupt 可能被 Android 的讀取 UI 流程消耗；停止狀態必須另外保留。
+        cancelStartCountdown()
         stopRequested = true
         worker?.interrupt()
         if (worker == null) {
@@ -129,9 +175,26 @@ class CoinService : AccessibilityService(), Phone {
         }
     }
 
+    fun setBadgeVisible(visible: Boolean) {
+        if (badge == null) showBadge()
+        val view = badge ?: return
+        val params = badgeParams ?: return
+        view.visibility = if (visible) View.VISIBLE else View.INVISIBLE
+        view.isEnabled = visible && !stopping
+        params.flags = if (visible) {
+            params.flags and WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE.inv()
+        } else {
+            params.flags or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
+        }
+        getSystemService(WindowManager::class.java).updateViewLayout(view, params)
+    }
+
     private fun setStatus(text: String) {
         statusText = text
-        badge?.text = "蝦幣 ▶ $text"
+        badge?.apply {
+            this.text = "蝦幣 ▶ $text"
+            isEnabled = true
+        }
     }
 
     private fun showStopped() {
@@ -154,7 +217,7 @@ class CoinService : AccessibilityService(), Phone {
             setPadding(24, 6, 24, 6)
             maxLines = 1
             text = STOPPED
-            setOnClickListener { if (running) stopBot() else startBot() }
+            setOnClickListener { if (running || countingDown) stopBot() else startBot() }
         }
         // 放在最下面的手勢導覽列上，蝦皮的按鈕都不會在那裡，bot 也不會點到
         val params = WindowManager.LayoutParams(
@@ -177,6 +240,7 @@ class CoinService : AccessibilityService(), Phone {
     private fun hideBadge() {
         badge?.let { getSystemService(WindowManager::class.java).removeView(it) }
         badge = null
+        badgeParams = null
     }
 
     private fun keepScreenOn(on: Boolean) {
