@@ -138,10 +138,7 @@ class CoinService : AccessibilityService(), Phone {
                 }
                 startCountdownSeconds = remaining
                 statusText = "即將開始(${remaining}s)"
-                badge?.apply {
-                    text = "蝦幣 ▶ 即將開始(${remaining}s)"
-                    isEnabled = false
-                }
+                badge?.text = "蝦幣 ▶ 取消開始(${remaining}s)"
                 main.postDelayed(this, 1000)
             }
         }
@@ -183,7 +180,7 @@ class CoinService : AccessibilityService(), Phone {
         val view = badge ?: return
         val params = badgeParams ?: return
         view.visibility = if (visible) View.VISIBLE else View.INVISIBLE
-        view.isEnabled = visible && !stopping && !countingDown
+        view.isEnabled = visible && !stopping
         params.flags = if (visible) {
             params.flags and WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE.inv()
         } else {
@@ -220,7 +217,7 @@ class CoinService : AccessibilityService(), Phone {
             setPadding(24, 6, 24, 6)
             maxLines = 1
             text = STOPPED
-            setOnClickListener { if (running) stopBot() else startBot() }
+            setOnClickListener { if (running || countingDown) stopBot() else startBot() }
         }
         // 放在最下面的手勢導覽列上，蝦皮的按鈕都不會在那裡，bot 也不會點到
         val params = WindowManager.LayoutParams(

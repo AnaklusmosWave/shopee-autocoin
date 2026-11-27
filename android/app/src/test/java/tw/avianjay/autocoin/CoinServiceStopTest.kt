@@ -98,7 +98,7 @@ class CoinServiceStopTest {
     }
 
     @Test
-    fun appStartButtonShowsCountdownAndDoesNotStartImmediately() {
+    fun appStartButtonCanCancelTheCountdown() {
         ReflectionHelpers.setStaticField(CoinService::class.java, "instance", service)
         val controller = Robolectric.buildActivity(MainActivity::class.java).create()
         val activity = controller.get()
@@ -106,16 +106,21 @@ class CoinServiceStopTest {
         service.startBotWithCountdown()
         ReflectionHelpers.callInstanceMethod<Unit>(activity, "refresh")
         val button = ReflectionHelpers.getField<Button>(activity, "startStop")
-        assertEquals("開始(3s)", button.text.toString())
+        assertEquals("取消開始(3s)", button.text.toString())
         assertEquals("即將開始(3s)", service.statusText)
         assertNull(worker())
 
         shadowOf(Looper.getMainLooper()).idleFor(1, TimeUnit.SECONDS)
         ReflectionHelpers.callInstanceMethod<Unit>(activity, "refresh")
-        assertEquals("開始(2s)", button.text.toString())
+        assertEquals("取消開始(2s)", button.text.toString())
         assertNull(worker())
 
-        service.stopBot()
+        assertTrue(button.isEnabled)
+        assertTrue(button.performClick())
+        shadowOf(Looper.getMainLooper()).idleFor(3, TimeUnit.SECONDS)
+        assertNull(worker())
+        assertFalse(service.countingDown)
+        assertEquals("開始", button.text.toString())
         controller.destroy()
     }
 

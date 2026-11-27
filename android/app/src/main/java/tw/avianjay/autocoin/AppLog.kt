@@ -2,9 +2,12 @@ package tw.avianjay.autocoin
 
 import android.content.Context
 import android.content.SharedPreferences
+import android.util.AtomicFile
 import android.util.Log
 import org.json.JSONObject
 import java.io.File
+import java.io.FileOutputStream
+import java.io.RandomAccessFile
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
@@ -87,17 +90,29 @@ object AppLog {
     private fun prepareConsole(now: LocalDateTime) {
         val target = consoleFile ?: return
         val prefs = consolePrefs ?: return
+        var needsRewrite = false
         if (loadedConsolePath != target.absolutePath) {
             lines.clear()
             if (target.exists()) {
                 try {
+                    RandomAccessFile(target, "r").use { file ->
+                        if (file.length() > 0) {
+                            file.seek(file.length() - 1)
+                            needsRewrite = file.read() != '\n'.code
+                        }
+                    }
                     target.forEachLine { raw ->
-                        val obj = JSONObject(raw)
-                        val date = LocalDate.parse(obj.getString("date"))
-                        lines.addLast(ConsoleLogEntry(date, obj.getString("line")))
+                        try {
+                            val obj = JSONObject(raw)
+                            val date = LocalDate.parse(obj.getString("date"))
+                            lines.addLast(ConsoleLogEntry(date, obj.getString("line")))
+                        } catch (e: Exception) {
+                            needsRewrite = true
+                            Log.w(TAG, "略過不完整的 console 紀錄", e)
+                        }
                     }
                 } catch (e: Exception) {
-                    lines.clear()
+                    needsRewrite = false
                     Log.e(TAG, "讀取 console 紀錄失敗", e)
                 }
             }
@@ -135,8 +150,9 @@ object AppLog {
         if (retained.size != lines.size) {
             lines.clear()
             lines.addAll(retained)
-            rewriteConsole()
+            needsRewrite = true
         }
+        if (needsRewrite) rewriteConsole()
     }
 
     private fun appendConsole(entry: ConsoleLogEntry) {
@@ -155,16 +171,20 @@ object AppLog {
 
     private fun rewriteConsole() {
         val target = consoleFile ?: return
+        val atomicFile = AtomicFile(target)
+        var stream: FileOutputStream? = null
         try {
-            target.writeText(
-                lines.joinToString(separator = "\n", postfix = if (lines.isEmpty()) "" else "\n") {
-                    JSONObject()
-                        .put("date", it.date.toString())
-                        .put("line", it.line)
-                        .toString()
-                },
-            )
+            val text = lines.joinToString(separator = "\n", postfix = if (lines.isEmpty()) "" else "\n") {
+                JSONObject()
+                    .put("date", it.date.toString())
+                    .put("line", it.line)
+                    .toString()
+            }
+            stream = atomicFile.startWrite()
+            stream.write(text.toByteArray())
+            atomicFile.finishWrite(stream)
         } catch (e: Exception) {
+            stream?.let(atomicFile::failWrite)
             Log.e(TAG, "整理 console 紀錄失敗", e)
         }
     }

@@ -146,9 +146,14 @@ class Store(ctx: Context) {
 
     private fun today() = LocalDate.now().toString()
 
-    private fun loadRoomRecords(): HashMap<String, RoomCoinRecord> {
-        val raw = roomRecordPrefs.getString("records", null) ?: return hashMapOf()
-        return try {
+    private fun loadRoomRecords(): HashMap<String, RoomCoinRecord> = synchronized(roomRecordPrefs) {
+        val raw = roomRecordPrefs.getString("records", null)
+        if (raw == null) {
+            return@synchronized loadLegacyRoomRecords().also {
+                if (it.isNotEmpty()) saveRoomRecords(it)
+            }
+        }
+        try {
             val json = JSONObject(raw)
             HashMap<String, RoomCoinRecord>().apply {
                 for (key in json.keys()) {
@@ -165,6 +170,26 @@ class Store(ctx: Context) {
         }
     }
 
+    private fun loadLegacyRoomRecords(): HashMap<String, RoomCoinRecord> {
+        val raw = prefs.getString("day", null) ?: return hashMapOf()
+        return try {
+            val legacy = JSONObject(raw)
+            val date = legacy.optString("date")
+            // 舊版在午夜換日，凌晨升級時可能仍保有上一日的資料。
+            if (date != today() && date != roomRecordsDate) return hashMapOf()
+            val rooms = legacy.optJSONObject("rooms") ?: return hashMapOf()
+            HashMap<String, RoomCoinRecord>().apply {
+                for (key in rooms.keys()) {
+                    val claims = rooms.optJSONObject(key)?.optInt("claims") ?: 0
+                    if (key.isNotEmpty() && claims > 0) put(key, RoomCoinRecord(null, claims))
+                }
+            }
+        } catch (e: Exception) {
+            AppLog.w("遷移直播間領取紀錄失敗：$e")
+            hashMapOf()
+        }
+    }
+
     private fun ensureRoomRecordDate() {
         val date = roomRecordDate(LocalDateTime.now())
         if (roomRecordsDate != date) {
@@ -174,11 +199,11 @@ class Store(ctx: Context) {
         }
     }
 
-    private fun saveRoomRecords() {
+    private fun saveRoomRecords(records: Map<String, RoomCoinRecord> = roomRecords) {
         roomRecordPrefs.edit()
             .putString("date", roomRecordsDate)
             .putString("records", JSONObject().apply {
-                for ((key, record) in roomRecords) put(key, JSONObject().apply {
+                for ((key, record) in records) put(key, JSONObject().apply {
                     record.maxCoins?.let { put("maxCoins", it) }
                     put("claims", record.claims)
                 })
@@ -197,18 +222,19 @@ class Store(ctx: Context) {
             return true
         }
         if (record.maxCoins == maxCoins) return false
+        if (record.maxCoins != null) record.claims = 0
         record.maxCoins = maxCoins
-        record.claims = 0
         return true
     }
 
-    /** 更新卡片上限；上限變動時只重置該房已領次數。 */
+    /** 更新卡片上限。已有上限且數值改變時，重置該房次數並回傳 true。 */
     @Synchronized
     fun observeRoomMax(key: String, maxCoins: Double?): Boolean {
         ensureRoomRecordDate()
+        val previouslyKnown = roomRecords[key]?.maxCoins != null
         val changed = updateRoomMax(key, maxCoins)
         if (changed) saveRoomRecords()
-        return changed
+        return previouslyKnown && changed
     }
 
     @Synchronized

@@ -1,6 +1,5 @@
 package tw.avianjay.autocoin
 
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -39,13 +38,6 @@ class BotRoomRotationTest {
         assertTrue(
             coinRoomEfficiency(4.8, 0) > coinRoomEfficiency(6.0, 3),
         )
-    }
-
-    @Test
-    fun claimBatchLimitCountsClaimsMadeAfterEnteringTheRoom() {
-        assertFalse(reachedRoomClaimLimit(0, 2, 3))
-        assertTrue(reachedRoomClaimLimit(0, 3, 3))
-        assertTrue(reachedRoomClaimLimit(3, 6, 3))
     }
 
     private fun card(key: String, maxCoins: Double) = Card(

@@ -84,9 +84,6 @@ internal fun bestCoinRoom(
         )
     }
 
-internal fun reachedRoomClaimLimit(claimsAtEntry: Int, totalClaims: Int, limit: Int): Boolean =
-    totalClaims - claimsAtEntry >= limit
-
 private fun round2(v: Double) = (v * 100).roundToInt() / 100.0
 
 class Bot(
@@ -441,7 +438,7 @@ class Bot(
         var wheelChecked = false
         var lastWheel = ""
         var key = ""
-        var claimsAtEntry = 0
+        var visitClaims = 0
         while (true) {
             val (scr, s) = look()
             if (scr != Screen.ROOM) {
@@ -463,23 +460,13 @@ class Bot(
                     }
                 }
                 if (roomStateChanged) store.save()
-                claimsAtEntry = roomKeys.maxOfOrNull { store.roomClaims(it) } ?: 0
             } else if (r.wheel != lastWheel) {
                 AppLog.d("轉盤狀態：'$lastWheel' → '${r.wheel}'")
             }
             lastWheel = r.wheel
-            if (purpose == "coins" &&
-                reachedRoomClaimLimit(
-                    claimsAtEntry,
-                    store.roomClaims(key),
-                    cfg.roomClaimsPerVisit,
-                )
-            ) {
-                return "claim_batch" to key
-            }
-
             val verdict = checkMessages(s)
             if (verdict == "room_done" || (verdict == "daily_limit" && purpose == "coins")) return verdict to key
+            if (purpose == "coins" && visitClaims >= cfg.roomClaimsPerVisit) return "claim_batch" to key
 
             // 幸運轉盤：每間一次，每天 10 次。「已參加」只代表關注過，不代表轉過
             if (!wheelChecked && day.canTryWheel(now())) {
@@ -496,7 +483,7 @@ class Bot(
                         store.recordWheelUnavailable()
                     }
                     if (settled) return "wheel_completed" to key
-                    return "wheel_checked" to key
+                    if (hasWheel) continue
                 }
             }
             if (purpose == "wheel") return "wheel_checked" to key
@@ -542,8 +529,11 @@ class Bot(
             }
             coinMissing = 0L
             if (r.coin.claimable) {
-                if ("成功" in r.claimed) sleep(1000)  // 上一次的成功提示還在，按鈕還沒換掉
-                else claim(r, setOf(key, card?.key.orEmpty()), card?.maxCoins)
+                if ("成功" in r.claimed) {
+                    sleep(1000)  // 上一次的成功提示還在，按鈕還沒換掉
+                } else if (claim(r, setOf(key, card?.key.orEmpty()), card?.maxCoins)) {
+                    visitClaims++
+                }
                 continue
             }
             val secs = r.coin.seconds
@@ -565,7 +555,7 @@ class Bot(
     }
 
     /** 按「直播間蝦幣」的領取，確認有成功。 */
-    private fun claim(r: Room, roomKeys: Set<String>, maxCoins: Double?) {
+    private fun claim(r: Room, roomKeys: Set<String>, maxCoins: Double?): Boolean {
         val key = r.key
         val before = r.coin.coin ?: 0.0
         phone.clearToast()
@@ -582,7 +572,7 @@ class Bot(
             val verdict = checkMessages(s, phone.lastToast())
             if (verdict.isNotEmpty()) {
                 AppLog.i("領取沒成功：${REASONS[verdict] ?: verdict}")
-                return
+                return false
             }
             sleep(300)
         }
@@ -595,7 +585,7 @@ class Bot(
             } else {
                 AppLog.w("直播間蝦幣按了沒反應（現在顯示：${after.state.ifEmpty { "不見了" }}）")
                 capture("claim-unknown", s)
-                return
+                return false
             }
         }
         val day = this.day
@@ -615,6 +605,7 @@ class Bot(
             sleep(800)
             if (!readRoom(phone.snapshot()).coin.claimable) break
         }
+        return true
     }
 
     /** 轉這間的幸運轉盤。看到結果（這次轉的或之前轉過的）就回傳 true。 */

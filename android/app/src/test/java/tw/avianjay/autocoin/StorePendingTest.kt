@@ -6,9 +6,11 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.json.JSONObject
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
+import java.time.LocalDate
 import java.time.LocalDateTime
 
 @RunWith(RobolectricTestRunner::class)
@@ -36,6 +38,36 @@ class StorePendingTest {
         assertEquals(0, store.roomClaims("主播"))
         assertEquals(1.25, store.day.coinTotal, 0.001)
         assertFalse(store.observeRoomMax("主播", 5.5))
+    }
+
+    @Test
+    fun firstKnownMaximumKeepsEarlierRoomClaims() {
+        val app = RuntimeEnvironment.getApplication()
+        store.recordRoomClaim(setOf("主播"), null)
+
+        assertFalse(store.observeRoomMax("主播", 6.0))
+        val restored = Store(app)
+        assertEquals(1, restored.roomClaims("主播"))
+        assertTrue(restored.observeRoomMax("主播", 5.5))
+        assertEquals(0, restored.roomClaims("主播"))
+    }
+
+    @Test
+    fun perRoomClaimCountSurvivesUpgradeAndTheNextStateSave() {
+        val app = RuntimeEnvironment.getApplication()
+        val oldRoom = JSONObject().put("claims", 3).put("coins", 1.25)
+        val oldDay = JSONObject()
+            .put("date", LocalDate.now().toString())
+            .put("coinClaims", 3)
+            .put("rooms", JSONObject().put("主播", oldRoom))
+        app.getSharedPreferences("state", android.content.Context.MODE_PRIVATE).edit()
+            .putString("day", oldDay.toString()).commit()
+
+        val upgraded = Store(app)
+        assertEquals(3, upgraded.day.coinClaims)
+        assertEquals(3, upgraded.roomClaims("主播"))
+        upgraded.save()
+        assertEquals(3, Store(app).roomClaims("主播"))
     }
 
     @Test
