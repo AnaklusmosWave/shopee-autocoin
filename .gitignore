@@ -32,3 +32,5 @@ android/local.properties
 .vscode/
 .DS_Store
 Thumbs.db
+
+cryptographic_key/ 
